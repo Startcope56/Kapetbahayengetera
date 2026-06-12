@@ -32,6 +32,14 @@ router.get("/users", requireAuth, async (req, res): Promise<void> => {
   res.json(users.map(formatUser));
 });
 
+router.get("/users/search", requireAuth, async (req, res): Promise<void> => {
+  const q = (req.query.q as string | undefined) ?? "";
+  const users = q
+    ? await db.select().from(usersTable).where(and(ilike(usersTable.name, `%${q}%`), eq(usersTable.isBlueAI, false))).limit(20)
+    : await db.select().from(usersTable).where(eq(usersTable.isBlueAI, false)).orderBy(desc(usersTable.createdAt)).limit(20);
+  res.json(users.map(formatUser));
+});
+
 router.get("/users/:id", requireAuth, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);

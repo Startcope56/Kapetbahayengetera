@@ -107,6 +107,39 @@ io.on("connection", (socket) => {
     io.to(`conv:${conversationId}`).emit("message_seen", { messageId, userId, seenBy });
   });
 
+  // ── Live Streaming ──────────────────────────────────────────────────────
+  socket.on("live_start", (data: any) => {
+    socket.join(`live:${data.streamId}`);
+    socket.broadcast.emit("live_new_stream", data);
+    logger.info({ userId, streamId: data.streamId }, "Live stream started");
+  });
+
+  socket.on("live_end", ({ streamId }: any) => {
+    io.to(`live:${streamId}`).emit("live_stream_ended", { streamId });
+    socket.leave(`live:${streamId}`);
+  });
+
+  socket.on("live_join", ({ streamId }: any) => {
+    socket.join(`live:${streamId}`);
+    const room = io.sockets.adapter.rooms.get(`live:${streamId}`);
+    io.to(`live:${streamId}`).emit("live_viewer_count", { count: room?.size ?? 1 });
+  });
+
+  socket.on("live_leave", ({ streamId }: any) => {
+    socket.leave(`live:${streamId}`);
+    const room = io.sockets.adapter.rooms.get(`live:${streamId}`);
+    io.to(`live:${streamId}`).emit("live_viewer_count", { count: room?.size ?? 0 });
+  });
+
+  socket.on("live_heart", ({ streamId }: any) => {
+    socket.to(`live:${streamId}`).emit("live_heart");
+  });
+
+  socket.on("live_comment", ({ streamId, comment }: any) => {
+    socket.to(`live:${streamId}`).emit("live_comment", comment);
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
   socket.on("disconnect", () => {
     logger.info({ userId }, "Socket disconnected");
   });

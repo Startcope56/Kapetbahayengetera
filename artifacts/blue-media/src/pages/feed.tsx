@@ -8,7 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Comment } from "@workspace/api-client-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Image as ImageIcon, MessageSquare, Share2, Send, X, MoreHorizontal, Trash2, Flag, Palette, Video, Smile, MapPin, Play } from "lucide-react";
+import { Image as ImageIcon, MessageSquare, Share2, Send, X, MoreHorizontal, Trash2, Flag, Palette, Video, Smile, MapPin, Play, Trophy, ShoppingBag, CalendarDays, Radio, Sparkles } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { uploadFile } from "@/lib/upload";
@@ -16,6 +16,7 @@ import { getSocket } from "@/lib/socket";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { StoriesBar } from "@/pages/stories";
 
 const REACTIONS = [
   { type: "heart", emoji: "🩷", label: "Love" },
@@ -81,19 +82,34 @@ function BadgeIcon() {
 }
 
 function CommentSection({ postId }: { postId: number }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const queryClient = useQueryClient();
   const [comment, setComment] = useState("");
+  const [replyTo, setReplyTo] = useState<{ id: number; name: string } | null>(null);
+  const [commentImageFile, setCommentImageFile] = useState<File | null>(null);
   const { data: comments } = useListPostComments(postId, { query: { queryKey: getListPostCommentsQueryKey(postId) } });
   const addComment = useAddPostComment();
   const { toast } = useToast();
+  const commentImgRef = useRef<HTMLInputElement>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!comment.trim()) return;
+    if (!comment.trim() && !commentImageFile) return;
     try {
-      await addComment.mutateAsync({ id: postId, data: { content: comment.trim() } });
+      let imgUrl: string | undefined;
+      if (commentImageFile && token) {
+        const form = new FormData();
+        form.append("file", commentImageFile);
+        const r = await fetch("/api/posts/upload", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+        const d = await r.json();
+        imgUrl = d.url;
+      }
+      const text = replyTo ? `@${replyTo.name} ${comment.trim()}` : comment.trim();
+      await addComment.mutateAsync({ id: postId, data: { content: text || "(image)", ...(imgUrl ? { imageUrl: imgUrl } as any : {}) } });
       setComment("");
+      setCommentImageFile(null);
+      setReplyTo(null);
+      if (commentImgRef.current) commentImgRef.current.value = "";
       queryClient.invalidateQueries({ queryKey: getListPostCommentsQueryKey(postId) });
       queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
     } catch (err: any) {
@@ -108,26 +124,58 @@ function CommentSection({ postId }: { postId: number }) {
   return (
     <div className="border-t border-gray-100 pt-3 px-4 pb-3 space-y-2">
       {comments?.map((c: Comment) => (
-        <div key={c.id} className="flex gap-2 items-start">
+        <div key={c.id} className="flex gap-2 items-start group">
           <Link href={`/profile/${c.author?.id}`}>
-            <Avatar className="h-7 w-7 shrink-0 cursor-pointer">
+            <Avatar className="h-7 w-7 shrink-0 cursor-pointer mt-0.5">
               <AvatarImage src={c.author?.profilePicture || undefined} />
               <AvatarFallback className="text-xs font-bold" style={{ background: "#1877f2", color: "white" }}>
                 {c.author?.name?.[0]?.toUpperCase()}
               </AvatarFallback>
             </Avatar>
           </Link>
-          <div className="flex-1 bg-gray-100 rounded-2xl px-3 py-1.5">
-            <div className="flex items-center gap-1">
-              <Link href={`/profile/${c.author?.id}`}>
-                <span className="font-semibold text-xs text-gray-800 hover:underline cursor-pointer">{c.author?.name}</span>
-              </Link>
-              {(c.author as any)?.blueBadge && <BadgeIcon />}
+          <div className="flex-1">
+            <div className="bg-gray-100 rounded-2xl px-3 py-1.5">
+              <div className="flex items-center gap-1">
+                <Link href={`/profile/${c.author?.id}`}>
+                  <span className="font-semibold text-xs text-gray-800 hover:underline cursor-pointer">{c.author?.name}</span>
+                </Link>
+                {(c.author as any)?.blueBadge && <BadgeIcon />}
+              </div>
+              <p className="text-sm text-gray-700 mt-0.5">{c.content}</p>
+              {(c as any).imageUrl && (
+                <img src={(c as any).imageUrl} alt="comment" className="mt-1.5 rounded-xl max-h-40 object-cover" />
+              )}
             </div>
-            <p className="text-sm text-gray-700">{c.content}</p>
+            <div className="flex items-center gap-3 px-2 mt-0.5">
+              <span className="text-[10px] text-gray-400">{c.createdAt ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) : ""}</span>
+              <button className="text-[10px] font-semibold text-gray-500 hover:text-blue-600 transition"
+                onClick={() => setReplyTo({ id: c.id, name: c.author?.name || "" })}>
+                Reply
+              </button>
+            </div>
           </div>
         </div>
       ))}
+
+      {/* Reply banner */}
+      {replyTo && (
+        <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-1.5 text-xs text-blue-700">
+          <span>Replying to <strong>@{replyTo.name}</strong></span>
+          <button onClick={() => setReplyTo(null)} className="ml-auto text-gray-400 hover:text-gray-600"><X className="h-3.5 w-3.5" /></button>
+        </div>
+      )}
+
+      {/* Comment image preview */}
+      {commentImageFile && (
+        <div className="relative inline-block ml-9">
+          <img src={URL.createObjectURL(commentImageFile)} alt="preview" className="rounded-xl max-h-28 object-cover border border-gray-200" />
+          <button onClick={() => { setCommentImageFile(null); if (commentImgRef.current) commentImgRef.current.value = ""; }}
+            className="absolute top-1 right-1 bg-gray-800/60 rounded-full p-0.5 text-white hover:bg-gray-800/80 transition">
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+
       <form onSubmit={submit} className="flex gap-2 items-center pt-1">
         <Avatar className="h-7 w-7 shrink-0">
           <AvatarImage src={user?.profilePicture || undefined} />
@@ -139,11 +187,17 @@ function CommentSection({ postId }: { postId: number }) {
           <input
             value={comment}
             onChange={e => setComment(e.target.value)}
-            placeholder="Write a comment..."
+            placeholder={replyTo ? `Reply to @${replyTo.name}...` : "Write a comment..."}
             className="flex-1 bg-transparent text-sm outline-none text-gray-700 placeholder-gray-400"
           />
-          <button type="submit" disabled={!comment.trim() || addComment.isPending}
-            className="text-blue-500 hover:text-blue-700 disabled:opacity-40 transition">
+          <input ref={commentImgRef} type="file" accept="image/*" className="hidden"
+            onChange={e => setCommentImageFile(e.target.files?.[0] || null)} />
+          <button type="button" onClick={() => commentImgRef.current?.click()}
+            className="text-green-500 hover:text-green-700 transition shrink-0">
+            <ImageIcon className="h-4 w-4" />
+          </button>
+          <button type="submit" disabled={(!comment.trim() && !commentImageFile) || addComment.isPending}
+            className="text-blue-500 hover:text-blue-700 disabled:opacity-40 transition shrink-0">
             <Send className="h-4 w-4" />
           </button>
         </div>
@@ -213,8 +267,10 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
   const [showMenu, setShowMenu] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
+  const [isFollowing, setIsFollowing] = useState(false);
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const { toast, } = useToast();
+  const { token } = useAuth();
   const reactPost = useReactToPost();
   const unreactPost = useRemovePostReaction();
   const deletePost = useDeletePost();
@@ -224,6 +280,21 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
 
   const isOwnPost = post.userId === currentUserId;
   const canDelete = isOwnPost || isAdmin;
+
+  const handleFollow = async () => {
+    if (!token) return;
+    try {
+      if (isFollowing) {
+        await fetch(`/api/users/${post.author?.id}/follow`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        setIsFollowing(false);
+        toast({ title: "Unfollowed" });
+      } else {
+        await fetch(`/api/users/${post.author?.id}/follow`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+        setIsFollowing(true);
+        toast({ title: `Following ${post.author?.name}!` });
+      }
+    } catch { toast({ title: "Error", variant: "destructive" }); }
+  };
 
   const toggleReaction = async (type: string) => {
     setShowPicker(false);
@@ -341,7 +412,16 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
             <MoreHorizontal className="h-5 w-5" />
           </button>
           {showMenu && (
-            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-30 w-44 overflow-hidden">
+            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-30 w-48 overflow-hidden">
+              {!isOwnPost && (
+                <button
+                  onClick={() => { handleFollow(); setShowMenu(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-blue-600 hover:bg-blue-50 transition"
+                >
+                  <span className="text-base">{isFollowing ? "👤" : "➕"}</span>
+                  {isFollowing ? "Unfollow" : `Follow ${post.author?.name?.split(" ")[0]}`}
+                </button>
+              )}
               {canDelete && (
                 <button
                   onClick={handleDelete}
@@ -495,7 +575,7 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
   );
 }
 
-type ComposerTab = "feeling" | "activity" | null;
+type ComposerTab = "feeling" | "activity" | "location" | null;
 
 export default function FeedPage() {
   const { user, token } = useAuth();
@@ -612,6 +692,43 @@ export default function FeedPage() {
 
   return (
     <div className="space-y-3">
+
+      {/* Stories */}
+      <StoriesBar />
+
+      {/* Quick feature links */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { href: "/ai", emoji: "🤖", label: "Blue AI", color: "bg-cyan-50 text-cyan-700" },
+          { href: "/games", emoji: "🎮", label: "Games", color: "bg-purple-50 text-purple-700" },
+          { href: "/leaderboard", emoji: "🏆", label: "Rank", color: "bg-yellow-50 text-yellow-700" },
+          { href: "/polls", emoji: "🗳️", label: "Polls", color: "bg-indigo-50 text-indigo-700" },
+        ].map(f => (
+          <Link key={f.href} href={f.href}>
+            <div className={`${f.color} rounded-2xl p-2.5 text-center cursor-pointer hover:opacity-80 transition active:scale-95`}>
+              <div className="text-2xl mb-0.5">{f.emoji}</div>
+              <p className="text-[10px] font-bold">{f.label}</p>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* Second row quick links */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { href: "/marketplace", emoji: "🛍️", label: "Shop", color: "bg-green-50 text-green-700" },
+          { href: "/events", emoji: "🎉", label: "Events", color: "bg-orange-50 text-orange-700" },
+          { href: "/memories", emoji: "✨", label: "Memories", color: "bg-pink-50 text-pink-700" },
+          { href: "/live", emoji: "🔴", label: "Go Live", color: "bg-red-50 text-red-600" },
+        ].map(f => (
+          <Link key={f.href} href={f.href}>
+            <div className={`${f.color} rounded-2xl p-2.5 text-center cursor-pointer hover:opacity-80 transition active:scale-95`}>
+              <div className="text-2xl mb-0.5">{f.emoji}</div>
+              <p className="text-[10px] font-bold">{f.label}</p>
+            </div>
+          </Link>
+        ))}
+      </div>
 
       {/* Composer trigger */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3">
