@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const conversationsTable = pgTable("conversations", {
@@ -8,6 +8,7 @@ export const conversationsTable = pgTable("conversations", {
   pictureUrl: text("picture_url"),
   backgroundTheme: text("background_theme"),
   createdBy: integer("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+  aiEnabled: boolean("ai_enabled").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -15,6 +16,7 @@ export const conversationParticipantsTable = pgTable("conversation_participants"
   id: serial("id").primaryKey(),
   conversationId: integer("conversation_id").notNull().references(() => conversationsTable.id, { onDelete: "cascade" }),
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  isAdmin: boolean("is_admin").notNull().default(false),
   joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -24,6 +26,7 @@ export const messagesTable = pgTable("messages", {
   senderId: integer("sender_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   imageUrl: text("image_url"),
+  replyToId: integer("reply_to_id"),
   seenBy: text("seen_by").notNull().default("[]"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

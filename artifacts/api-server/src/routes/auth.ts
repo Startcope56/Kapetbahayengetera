@@ -1,11 +1,19 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import { db, usersTable, sessionsTable } from "@workspace/db";
+import { db, usersTable, sessionsTable, siteSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, getUser, formatUser } from "../lib/auth";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+async function getApprovalRequired(): Promise<boolean> {
+  try {
+    const [row] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "approval_required")).limit(1);
+    return row?.value === "true";
+  } catch { return false; }
+}
 
 router.post("/auth/register", async (req, res): Promise<void> => {
   const { email, name, pin } = req.body;
@@ -20,10 +28,27 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   }
   const pinHash = await bcrypt.hash(pin, 10);
   const isAdmin = email === "startcopediwznaga@gmail.com";
-  const [user] = await db.insert(usersTable).values({ email, name, pinHash, privacy: "public", isAdmin }).returning();
-  const token = crypto.randomBytes(32).toString("hex");
-  await db.insert(sessionsTable).values({ userId: user.id, token });
-  res.status(201).json({ user: formatUser(user), token });
+  const approvalRequired = isAdmin ? false : await getApprovalRequired();
+  const accountApproved = isAdmin ? true : !approvalRequired;
+
+  const [user] = await db.insert(usersTable).values({
+    email, name, pinHash, privacy: "public", isAdmin,
+    accountApproved,
+    rank: "Newbie",
+  } as any).returning();
+
+  if (accountApproved) {
+    const token = crypto.randomBytes(32).toString("hex");
+    await db.insert(sessionsTable).values({ userId: user.id, token });
+    res.status(201).json({ user: formatUser(user), token });
+  } else {
+    res.status(201).json({
+      user: null,
+      token: null,
+      pending: true,
+      message: "YOUR ACCOUNT IS WAITING FOR APPROVAL 🔒\n\nYour account has been submitted for review. The admin will approve your account shortly. Please check back later!\n\n— Blue Media Team 💙",
+    });
+  }
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {
@@ -35,6 +60,19 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
   if (!user) {
     res.status(401).json({ error: "Invalid email or PIN" });
+    return;
+  }
+  // Admin always bypasses approval
+  if (!user.isAdmin && user.accountApproved === false) {
+    res.status(403).json({
+      error: "YOUR ACCOUNT IS WAITING FOR APPROVAL 🔒",
+      pending: true,
+      message: "Your account is still pending admin approval. Please wait for confirmation.",
+    });
+    return;
+  }
+  if (user.banned) {
+    res.status(403).json({ error: "Your account has been banned. Contact admin for assistance." });
     return;
   }
   const valid = await bcrypt.compare(pin, user.pinHash);

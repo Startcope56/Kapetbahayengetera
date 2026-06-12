@@ -7,6 +7,7 @@ import postsRouter from "./posts";
 import conversationsRouter from "./conversations";
 import notificationsRouter from "./notifications";
 import reportsRouter from "./reports";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(postsRouter);
 router.use(conversationsRouter);
 router.use(notificationsRouter);
 router.use(reportsRouter);
+router.use(adminRouter);
 
 export default router;

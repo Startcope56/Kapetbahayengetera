@@ -23,9 +23,9 @@ export function hashData(data: string): string {
 const ipWindowMap = new Map<string, { count: number; windowStart: number; blocked: boolean; blockedAt: number }>();
 
 const WINDOW_MS = 60_000;
-const MAX_REQUESTS_PER_WINDOW = 200;
-const AUTH_MAX_REQUESTS = 20;
-const BLOCK_DURATION_MS = 5 * 60_000;
+const MAX_REQUESTS_PER_WINDOW = 600;
+const AUTH_MAX_REQUESTS = 30;
+const BLOCK_DURATION_MS = 2 * 60_000;
 
 function getIp(req: Request): string {
   const forwarded = req.headers["x-forwarded-for"];

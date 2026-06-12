@@ -57,6 +57,13 @@ export function formatUser(user: typeof usersTable.$inferSelect) {
     blueBadgeClaimedAt: user.blueBadgeClaimedAt ? user.blueBadgeClaimedAt.toISOString() : null,
     restricted: user.restricted ?? false,
     banned: user.banned ?? false,
+    accountApproved: (user as any).accountApproved ?? true,
+    followerCount: (user as any).followerCount ?? 0,
+    followingCount: (user as any).followingCount ?? 0,
+    postCount: (user as any).postCount ?? 0,
+    totalPostViews: (user as any).totalPostViews ?? 0,
+    profileViewCount: (user as any).profileViewCount ?? 0,
+    rank: (user as any).rank ?? "Newbie",
     createdAt: user.createdAt.toISOString(),
   };
 }

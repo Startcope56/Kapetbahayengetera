@@ -61,6 +61,37 @@ io.on("connection", (socket) => {
     socket.to(`conv:${conversationId}`).emit("typing", { userId, conversationId });
   });
 
+  // ── WebRTC Call Signaling ──────────────────────────────────────────────
+  socket.on("call_user", ({ to, from, type, name, avatar, conversationId }: any) => {
+    io.to(`user:${to}`).emit("call_incoming", { from, type, name, avatar, conversationId });
+  });
+
+  socket.on("call_answer", ({ to, from }: any) => {
+    io.to(`user:${to}`).emit("call_answered", { from });
+  });
+
+  socket.on("call_reject", ({ to }: any) => {
+    io.to(`user:${to}`).emit("call_rejected");
+  });
+
+  socket.on("call_end", ({ to }: any) => {
+    io.to(`user:${to}`).emit("call_ended");
+  });
+
+  // WebRTC offer/answer/ICE exchange
+  socket.on("webrtc_offer", ({ to, offer }: any) => {
+    io.to(`user:${to}`).emit("webrtc_offer", { from: userId, offer });
+  });
+
+  socket.on("webrtc_answer", ({ to, answer }: any) => {
+    io.to(`user:${to}`).emit("webrtc_answer", { from: userId, answer });
+  });
+
+  socket.on("webrtc_ice", ({ to, candidate }: any) => {
+    io.to(`user:${to}`).emit("webrtc_ice", { from: userId, candidate });
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
   socket.on("seen", async ({ conversationId, messageId }: { conversationId: number; messageId: number }) => {
     const [msg] = await db
       .select()
