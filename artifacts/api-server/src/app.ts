@@ -1,10 +1,16 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import path from "path";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { ddosProtection, securityHeaders, requestSignatureMiddleware } from "./lib/security";
 
 const app: Express = express();
+
+app.set("trust proxy", 1);
+app.use(securityHeaders);
+app.use(ddosProtection);
 
 app.use(
   pinoHttp({
@@ -25,10 +31,19 @@ app.use(
     },
   }),
 );
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(requestSignatureMiddleware);
+
+const workspaceRoot = process.cwd().endsWith(path.join("artifacts", "api-server"))
+  ? path.resolve(process.cwd(), "../..")
+  : process.cwd();
+
+const uploadsDir = path.resolve(workspaceRoot, "artifacts/api-server/uploads");
+app.use("/api/uploads", express.static(uploadsDir));
 
 app.use("/api", router);
 
 export default app;
+export { workspaceRoot, uploadsDir };
