@@ -2,15 +2,13 @@ import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import app from "./app";
 import { logger } from "./lib/logger";
-import { db, sessionsTable, usersTable, messagesTable, conversationParticipantsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, sessionsTable, usersTable, messagesTable, conversationParticipantsTable, postsTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
+  throw new Error("PORT environment variable is required but was not provided.");
 }
 
 const port = Number(rawPort);
@@ -29,17 +27,13 @@ export const io = new SocketIOServer(server, {
 
 io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token as string | undefined;
-  if (!token) {
-    return next(new Error("No token"));
-  }
+  if (!token) return next(new Error("No token"));
   const [session] = await db
     .select({ userId: sessionsTable.userId })
     .from(sessionsTable)
     .where(eq(sessionsTable.token, token))
     .limit(1);
-  if (!session) {
-    return next(new Error("Invalid token"));
-  }
+  if (!session) return next(new Error("Invalid token"));
   socket.data.userId = session.userId;
   next();
 });
@@ -61,8 +55,9 @@ io.on("connection", (socket) => {
     socket.to(`conv:${conversationId}`).emit("typing", { userId, conversationId });
   });
 
-  // ── WebRTC Call Signaling ──────────────────────────────────────────────
+  // ── WebRTC Call Signaling ──────────────────────────────────────────────────
   socket.on("call_user", ({ to, from, type, name, avatar, conversationId }: any) => {
+    logger.info({ from, to, type }, "Call initiated");
     io.to(`user:${to}`).emit("call_incoming", { from, type, name, avatar, conversationId });
   });
 
@@ -78,7 +73,7 @@ io.on("connection", (socket) => {
     io.to(`user:${to}`).emit("call_ended");
   });
 
-  // WebRTC offer/answer/ICE exchange
+  // WebRTC offer/answer/ICE
   socket.on("webrtc_offer", ({ to, offer }: any) => {
     io.to(`user:${to}`).emit("webrtc_offer", { from: userId, offer });
   });
@@ -90,7 +85,7 @@ io.on("connection", (socket) => {
   socket.on("webrtc_ice", ({ to, candidate }: any) => {
     io.to(`user:${to}`).emit("webrtc_ice", { from: userId, candidate });
   });
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
 
   socket.on("seen", async ({ conversationId, messageId }: { conversationId: number; messageId: number }) => {
     const [msg] = await db
@@ -107,16 +102,47 @@ io.on("connection", (socket) => {
     io.to(`conv:${conversationId}`).emit("message_seen", { messageId, userId, seenBy });
   });
 
-  // ── Live Streaming ──────────────────────────────────────────────────────
-  socket.on("live_start", (data: any) => {
+  // ── Live Streaming ────────────────────────────────────────────────────────
+  socket.on("live_start", async (data: any) => {
     socket.join(`live:${data.streamId}`);
+    // Mark user as live in DB
+    await db.update(usersTable).set({
+      isLive: true,
+      liveTitle: data.title || "Going Live!",
+      liveStreamId: data.streamId,
+    } as any).where(eq(usersTable.id, userId)).catch(() => {});
+
+    // Auto-create a post so it appears in the feed
+    try {
+      const [livePost] = await db.insert(postsTable).values({
+        userId,
+        content: `🔴 LIVE NOW: ${data.title || "Streaming Live!"}\n\nTap to join the live stream! 💙`,
+        bgColor: "linear-gradient(135deg,#ef4444,#dc2626)",
+        location: "live",
+      } as any).returning();
+      // Notify everyone
+      io.emit("new_post", { post: livePost });
+      io.emit("user_went_live", {
+        userId,
+        userName: data.userName,
+        userAvatar: data.userAvatar,
+        streamId: data.streamId,
+        title: data.title,
+      });
+    } catch (e) {
+      logger.error({ e }, "Failed to create live post");
+    }
+
     socket.broadcast.emit("live_new_stream", data);
     logger.info({ userId, streamId: data.streamId }, "Live stream started");
   });
 
-  socket.on("live_end", ({ streamId }: any) => {
+  socket.on("live_end", async ({ streamId }: any) => {
     io.to(`live:${streamId}`).emit("live_stream_ended", { streamId });
     socket.leave(`live:${streamId}`);
+    // Clear live status
+    await db.update(usersTable).set({ isLive: false, liveTitle: null, liveStreamId: null } as any).where(eq(usersTable.id, userId)).catch(() => {});
+    io.emit("user_live_ended", { userId });
   });
 
   socket.on("live_join", ({ streamId }: any) => {
@@ -140,8 +166,10 @@ io.on("connection", (socket) => {
   });
   // ─────────────────────────────────────────────────────────────────────────
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     logger.info({ userId }, "Socket disconnected");
+    // Auto-end live if disconnected
+    await db.update(usersTable).set({ isLive: false, liveTitle: null, liveStreamId: null } as any).where(eq(usersTable.id, userId)).catch(() => {});
   });
 });
 

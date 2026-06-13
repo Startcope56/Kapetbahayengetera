@@ -26,6 +26,9 @@ export const usersTable = pgTable("users", {
   totalPostViews: integer("total_post_views").notNull().default(0),
   profileViewCount: integer("profile_view_count").notNull().default(0),
   rank: text("rank").notNull().default("Newbie"),
+  isLive: boolean("is_live").notNull().default(false),
+  liveTitle: text("live_title"),
+  liveStreamId: text("live_stream_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -44,8 +47,19 @@ export const siteSettingsTable = pgTable("site_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const followerRequestsTable = pgTable("follower_requests", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  requestedAmount: integer("requested_amount").notNull(),
+  status: text("status").notNull().default("pending"),
+  adminNote: text("admin_note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;
 export type Session = typeof sessionsTable.$inferSelect;
 export type SiteSetting = typeof siteSettingsTable.$inferSelect;
+export type FollowerRequest = typeof followerRequestsTable.$inferSelect;

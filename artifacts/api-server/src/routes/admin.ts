@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, postsTable, reportsTable, notificationsTable, siteSettingsTable } from "@workspace/db";
-import { eq, desc, count, sql } from "drizzle-orm";
+import { db, usersTable, postsTable, reportsTable, notificationsTable, siteSettingsTable, followerRequestsTable } from "@workspace/db";
+import { eq, desc, count, sql, and } from "drizzle-orm";
 import { requireAuth, getUser, formatUser } from "../lib/auth";
 import { io } from "../index";
 
@@ -22,7 +22,6 @@ router.get("/admin/users", requireAuth, requireAdmin, async (_req, res): Promise
 router.post("/admin/users/:id/approve", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   await db.update(usersTable).set({ accountApproved: true } as any).where(eq(usersTable.id, id));
-  // Notify user
   await db.insert(notificationsTable).values({
     userId: id, type: "system", message: "✅ Your Blue Media account has been approved! Welcome aboard! 💙",
   } as any).catch(() => {});
@@ -66,6 +65,16 @@ router.post("/admin/users/:id/make-admin", requireAuth, requireAdmin, async (req
   const id = parseInt(req.params.id as string, 10);
   const { isAdmin } = req.body;
   await db.update(usersTable).set({ isAdmin }).where(eq(usersTable.id, id));
+  // Seed admin stats
+  if (isAdmin) {
+    await db.update(usersTable).set({
+      followerCount: 10200,
+      followingCount: 240,
+      rank: "GOAT",
+      blueBadge: true,
+      accountApproved: true,
+    } as any).where(eq(usersTable.id, id));
+  }
   res.json({ ok: true });
 });
 
@@ -112,10 +121,11 @@ router.get("/admin/stats", requireAuth, requireAdmin, async (_req, res): Promise
   const [{ total: pendingReports }] = await db.select({ total: count() }).from(reportsTable).where(eq(reportsTable.status, "pending"));
   const [{ total: pendingAccounts }] = await db.select({ total: count() }).from(usersTable).where(eq((usersTable as any).accountApproved, false));
   const [{ total: bannedUsers }] = await db.select({ total: count() }).from(usersTable).where(eq(usersTable.banned, true));
-  res.json({ totalUsers, totalPosts, pendingReports, pendingAccounts, bannedUsers });
+  const [{ total: pendingFollowerRequests }] = await db.select({ total: count() }).from(followerRequestsTable).where(eq(followerRequestsTable.status, "pending"));
+  res.json({ totalUsers, totalPosts, pendingReports, pendingAccounts, bannedUsers, pendingFollowerRequests });
 });
 
-// Site settings (approval toggle, etc.)
+// Site settings
 router.get("/admin/settings", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const settings = await db.select().from(siteSettingsTable);
   const obj: Record<string, string> = {};
@@ -134,7 +144,7 @@ router.post("/admin/settings", requireAuth, requireAdmin, async (req, res): Prom
   res.json({ ok: true });
 });
 
-// Broadcast system notification to all users
+// Broadcast system notification
 router.post("/admin/broadcast", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const { message } = req.body;
   if (!message) { res.status(400).json({ error: "message required" }); return; }
@@ -146,7 +156,7 @@ router.post("/admin/broadcast", requireAuth, requireAdmin, async (req, res): Pro
   res.json({ ok: true, sent: users.length });
 });
 
-// Delete user account entirely
+// Delete user account
 router.delete("/admin/users/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
   const me = getUser(req);
@@ -161,6 +171,67 @@ router.post("/admin/users/:id/rank", requireAuth, requireAdmin, async (req, res)
   const id = parseInt(req.params.id as string, 10);
   const { rank } = req.body;
   await db.update(usersTable).set({ rank } as any).where(eq(usersTable.id, id));
+  res.json({ ok: true });
+});
+
+// Set user follower/following counts manually
+router.post("/admin/users/:id/stats", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const { followerCount, followingCount, totalPostViews } = req.body;
+  const update: any = {};
+  if (followerCount !== undefined) update.followerCount = followerCount;
+  if (followingCount !== undefined) update.followingCount = followingCount;
+  if (totalPostViews !== undefined) update.totalPostViews = totalPostViews;
+  await db.update(usersTable).set(update).where(eq(usersTable.id, id));
+  res.json({ ok: true });
+});
+
+// ── FOLLOWER REQUESTS ─────────────────────────────────────────────────────────
+// Get all follower requests
+router.get("/admin/follower-requests", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const requests = await db.select().from(followerRequestsTable).orderBy(desc(followerRequestsTable.createdAt));
+  const result = await Promise.all(requests.map(async r => {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, r.userId)).limit(1);
+    return { ...r, user: user ? formatUser(user) : null };
+  }));
+  res.json(result);
+});
+
+// Approve a follower request
+router.post("/admin/follower-requests/:id/approve", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const { adminNote } = req.body;
+  const [request] = await db.select().from(followerRequestsTable).where(eq(followerRequestsTable.id, id)).limit(1);
+  if (!request) { res.status(404).json({ error: "Request not found" }); return; }
+  // Update request status
+  await db.update(followerRequestsTable).set({ status: "approved", adminNote: adminNote || "Approved!" } as any).where(eq(followerRequestsTable.id, id));
+  // Add followers to user
+  const [currentUser] = await db.select().from(usersTable).where(eq(usersTable.id, request.userId)).limit(1);
+  const newCount = ((currentUser as any).followerCount ?? 0) + request.requestedAmount;
+  await db.update(usersTable).set({ followerCount: newCount } as any).where(eq(usersTable.id, request.userId));
+  // Notify user
+  await db.insert(notificationsTable).values({
+    userId: request.userId,
+    type: "system",
+    message: `🎉 Your follower request has been approved! +${request.requestedAmount.toLocaleString()} followers added to your account! 💙`,
+  } as any).catch(() => {});
+  io.to(`user:${request.userId}`).emit("notification", { type: "followers_approved", amount: request.requestedAmount });
+  res.json({ ok: true, newFollowerCount: newCount });
+});
+
+// Reject a follower request
+router.post("/admin/follower-requests/:id/reject", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string, 10);
+  const { adminNote } = req.body;
+  await db.update(followerRequestsTable).set({ status: "rejected", adminNote: adminNote || "Request rejected." } as any).where(eq(followerRequestsTable.id, id));
+  const [request] = await db.select().from(followerRequestsTable).where(eq(followerRequestsTable.id, id)).limit(1);
+  if (request) {
+    await db.insert(notificationsTable).values({
+      userId: request.userId,
+      type: "system",
+      message: `❌ Your follower request of ${request.requestedAmount.toLocaleString()} followers was reviewed. ${adminNote || "Please try again later."}`,
+    } as any).catch(() => {});
+  }
   res.json({ ok: true });
 });
 

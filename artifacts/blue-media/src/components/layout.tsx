@@ -3,7 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   Home, Users, MessageCircle, Bell, Shield, ChevronDown, LogOut, Settings,
   Radio, Search, BarChart3, Compass, Trophy, Clock, ShoppingBag, CalendarDays,
-  Sparkles, Gamepad2, BarChart2, Smile, Star
+  Sparkles, Gamepad2, BarChart2, Smile, Star, Play, UserPlus
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -23,14 +23,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const bottomTabs = [
     { icon: Home, href: "/feed", label: "Home" },
-    { icon: Compass, href: "/explore", label: "Explore" },
+    { icon: Play, href: "/videos", label: "Videos" },
     { icon: MessageCircle, href: "/chat", label: "Messages" },
     { icon: Bell, href: "/notifications", label: "Notifs" },
   ];
 
   const moreMenuItems = [
     { icon: BarChart3, href: "/dashboard", label: "My Dashboard", color: "bg-blue-100", iconColor: "text-blue-600" },
+    { icon: UserPlus, href: "/request-followers", label: "Request Followers 📊", color: "bg-indigo-100", iconColor: "text-indigo-600" },
     { icon: Users, href: "/friends", label: "Friends", color: "bg-green-100", iconColor: "text-green-600" },
+    { icon: Compass, href: "/explore", label: "Explore 🔍", color: "bg-sky-100", iconColor: "text-sky-600" },
     { icon: Sparkles, href: "/ai", label: "Blue AI 🤖", color: "bg-cyan-100", iconColor: "text-cyan-600" },
     { icon: BarChart2, href: "/polls", label: "Polls 🗳️", color: "bg-indigo-100", iconColor: "text-indigo-600" },
     { icon: Gamepad2, href: "/games", label: "Games 🎮", color: "bg-purple-100", iconColor: "text-purple-600" },
@@ -68,7 +70,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Live button */}
             <Link href="/live">
-              <button className="flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded-full text-xs font-bold transition">
+              <button className="flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded-full text-xs font-bold transition animate-pulse">
                 <Radio className="h-3 w-3" /> LIVE
               </button>
             </Link>
@@ -95,6 +97,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center w-3.5 h-3.5 rounded-full text-white text-[7px] font-bold border border-white"
                         style={{ background: "#1877f2" }}>✓</span>
                     )}
+                    {(user as any).isLive && (
+                      <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center w-3 h-3 rounded-full bg-red-500 border border-white" />
+                    )}
                   </div>
                   <span className="text-white text-sm font-medium max-w-[60px] truncate hidden sm:block">{user.name.split(" ")[0]}</span>
                   <ChevronDown className="h-3.5 w-3.5 text-white/70" />
@@ -104,12 +109,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {/* Profile card */}
                 <Link href={`/profile/${user.id}`}>
                   <DropdownMenuItem className="cursor-pointer gap-3 py-3 px-3 rounded-lg hover:bg-blue-50">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={user.profilePicture || undefined} />
-                      <AvatarFallback className="font-bold text-sm" style={{ background: "#1877f2", color: "white" }}>
-                        {user.name[0].toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="relative">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={user.profilePicture || undefined} />
+                        <AvatarFallback className="font-bold text-sm" style={{ background: "#1877f2", color: "white" }}>
+                          {user.name[0].toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      {(user as any).isLive && (
+                        <span className="absolute -top-1 -right-1 flex items-center gap-0.5 bg-red-500 text-white text-[8px] font-bold px-1 py-0.5 rounded-full">
+                          🔴 LIVE
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-1">
                         <span className="font-semibold text-gray-800 truncate">{user.name}</span>
@@ -122,18 +134,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </DropdownMenuItem>
                 </Link>
 
-                {/* Rank badge */}
-                {(user as any).rank && (
-                  <div className="px-3 py-1 mb-1">
-                    <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-blue-100 text-blue-700">
-                      {(user as any).rank === "GOAT" ? "🐐 GOAT" :
-                       (user as any).rank === "Legend" ? "🔥 Legend" :
-                       (user as any).rank === "VIP" ? "⭐ VIP" :
-                       (user as any).rank === "Influencer" ? "🌟 Influencer" :
-                       `${(user as any).rank}`}
-                    </span>
+                {/* Stats row */}
+                <div className="px-3 py-2 flex gap-3 text-center">
+                  <div className="flex-1">
+                    <p className="font-black text-sm text-gray-900">{((user as any).followerCount ?? 0).toLocaleString()}</p>
+                    <p className="text-[10px] text-gray-400">Followers</p>
                   </div>
-                )}
+                  <div className="flex-1">
+                    <p className="font-black text-sm text-gray-900">{((user as any).followingCount ?? 0).toLocaleString()}</p>
+                    <p className="text-[10px] text-gray-400">Following</p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-black text-sm text-gray-900">{(user as any).rank ?? "Newbie"}</p>
+                    <p className="text-[10px] text-gray-400">Rank</p>
+                  </div>
+                </div>
 
                 <DropdownMenuSeparator className="my-1" />
 

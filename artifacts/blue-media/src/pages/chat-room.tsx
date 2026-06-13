@@ -213,6 +213,14 @@ export default function ChatRoomPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Parse URL params for answering incoming calls redirected from global handler
+  const urlParams = new URLSearchParams(window.location.search);
+  const shouldAnswer = urlParams.get("answering") === "1";
+  const urlCallType = (urlParams.get("callType") as "voice" | "video") || "voice";
+  const urlCallerName = urlParams.get("callerName") ? decodeURIComponent(urlParams.get("callerName")!) : "";
+  const urlCallerAvatar = urlParams.get("callerAvatar") ? decodeURIComponent(urlParams.get("callerAvatar")!) : undefined;
+  const urlCallFrom = urlParams.get("callFrom") ? parseInt(urlParams.get("callFrom")!) : null;
+
   const [message, setMessage] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [replyTo, setReplyTo] = useState<any>(null);
@@ -229,8 +237,25 @@ export default function ChatRoomPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [videoEffect, setVideoEffect] = useState("none");
-  const [incomingCall, setIncomingCall] = useState<{ from: number; type: "voice" | "video"; name: string; avatar?: string } | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{ from: number; type: "voice" | "video"; name: string; avatar?: string } | null>(
+    shouldAnswer && urlCallFrom ? { from: urlCallFrom, type: urlCallType, name: urlCallerName, avatar: urlCallerAvatar } : null
+  );
   const callRingtoneRef = useRef<HTMLAudioElement | null>(null);
+
+  // Auto-answer if navigated here from global call popup
+  useEffect(() => {
+    if (shouldAnswer && urlCallFrom) {
+      setCallState("ringing");
+      // Clean up URL params without reload
+      const url = new URL(window.location.href);
+      url.searchParams.delete("answering");
+      url.searchParams.delete("callType");
+      url.searchParams.delete("callerName");
+      url.searchParams.delete("callerAvatar");
+      url.searchParams.delete("callFrom");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
 
   const { data: conv } = useGetConversation(convId);
   const { data: messages } = useListMessages(convId);

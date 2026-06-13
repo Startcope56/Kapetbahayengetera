@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { CallProvider } from "@/context/CallContext";
 import { Layout } from "@/components/layout";
 
 import AuthPage from "@/pages/auth";
@@ -26,6 +27,8 @@ import PollsPage from "@/pages/polls";
 import GamesPage from "@/pages/games";
 import MoodPage from "@/pages/mood";
 import HighlightsPage from "@/pages/highlights";
+import YoutubePage from "@/pages/youtube";
+import RequestFollowersPage from "@/pages/request-followers";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -58,6 +61,8 @@ function Router() {
       <Route path="/games"><Layout><ProtectedRoute component={GamesPage} /></Layout></Route>
       <Route path="/mood"><Layout><ProtectedRoute component={MoodPage} /></Layout></Route>
       <Route path="/highlights"><Layout><ProtectedRoute component={HighlightsPage} /></Layout></Route>
+      <Route path="/videos"><Layout><ProtectedRoute component={YoutubePage} /></Layout></Route>
+      <Route path="/request-followers"><Layout><ProtectedRoute component={RequestFollowersPage} /></Layout></Route>
       <Route path="/profile/:id"><Layout><ProtectedRoute component={ProfilePage} /></Layout></Route>
       <Route path="/friends"><Layout><ProtectedRoute component={FriendsPage} /></Layout></Route>
       <Route path="/chat"><Layout><ProtectedRoute component={ChatListPage} /></Layout></Route>
@@ -76,7 +81,9 @@ function App() {
       <TooltipProvider>
         <AuthProvider>
           <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
-            <Router />
+            <CallProvider>
+              <Router />
+            </CallProvider>
           </WouterRouter>
         </AuthProvider>
         <Toaster />
