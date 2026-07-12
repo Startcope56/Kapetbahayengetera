@@ -7,7 +7,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { requireAuth, getUser, formatUser } from "../lib/auth";
 import { uploadsDir } from "../app";
 import { io } from "../index";
-import { generateBlueAIResponse } from "../lib/blueai";
+import { generateBlueAIResponse, generateBlueAIResponseWithImage } from "../lib/blueai";
 import { containsProfanity } from "../lib/profanity";
 import bcrypt from "bcryptjs";
 
@@ -23,7 +23,7 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
   },
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
 
 async function buildMessage(msg: typeof messagesTable.$inferSelect) {
   const [sender] = await db.select().from(usersTable).where(eq(usersTable.id, msg.senderId)).limit(1);
@@ -39,6 +39,7 @@ async function buildMessage(msg: typeof messagesTable.$inferSelect) {
     senderId: msg.senderId,
     content: msg.content,
     imageUrl: msg.imageUrl,
+    voiceUrl: msg.voiceUrl,
     sender: sender ? formatUser(sender) : null,
     reactions: reactionsFull,
     seenBy,
@@ -72,6 +73,7 @@ async function buildConversation(conv: typeof conversationsTable.$inferSelect, m
     name: conv.name,
     pictureUrl: conv.pictureUrl,
     backgroundTheme: conv.backgroundTheme,
+    aiEnabled: conv.aiEnabled,
     participants: participantUsers.filter(Boolean),
     lastMessage: lastMsg ? await buildMessage(lastMsg) : null,
     unreadCount,
@@ -92,6 +94,28 @@ async function getOrCreateBlueAIUser() {
     bio: "Ako ang official AI assistant ng Blue Media! Magtanong ka sa akin tungkol sa app. 💙",
   }).returning();
   return user;
+}
+
+async function triggerAIReply(convId: number, userMessage: string, imageUrl?: string | null) {
+  const aiUser = await getOrCreateBlueAIUser();
+  setTimeout(async () => {
+    try {
+      let aiResponse: string;
+      if (imageUrl) {
+        aiResponse = await generateBlueAIResponseWithImage(userMessage, imageUrl);
+      } else {
+        aiResponse = await generateBlueAIResponse(userMessage);
+      }
+      const [aiMsg] = await db.insert(messagesTable).values({
+        conversationId: convId,
+        senderId: aiUser.id,
+        content: aiResponse,
+        seenBy: JSON.stringify([aiUser.id]),
+      }).returning();
+      const builtAi = await buildMessage(aiMsg);
+      io.to(`conv:${convId}`).emit("message", builtAi);
+    } catch { /* silently fail */ }
+  }, 1000 + Math.random() * 1000);
 }
 
 router.get("/conversations", requireAuth, async (req, res): Promise<void> => {
@@ -173,8 +197,7 @@ router.post("/conversations/blue-ai", requireAuth, async (req, res): Promise<voi
   await db.insert(conversationParticipantsTable).values({ conversationId: conv.id, userId: me.id });
   await db.insert(conversationParticipantsTable).values({ conversationId: conv.id, userId: aiUser.id });
 
-  // Send welcome message from BLUE AI
-  const welcomeMsg = "Kumusta! Ako si BLUE AI — ang official AI assistant ng Blue Media! 💙\n\nPwede mo akong itanong tungkol sa:\n• Paano gamitin ang Blue Media\n• Mga rules at guidelines\n• Features ng app\n\nAno ang maari kong gawin para sa inyo today? 😊";
+  const welcomeMsg = "Kumusta! Ako si BLUE AI — ang official AI assistant ng Blue Media! 💙\n\nPwede mo akong itanong tungkol sa:\n• Paano gamitin ang Blue Media\n• Mga rules at guidelines\n• Features ng app\n• School subjects, advice, jokes, trivia\n• Mag-upload ng image at sasabihin ko kung ano ang makikita!\n\nAno ang maari kong gawin para sa inyo today? 😊";
   const [msg] = await db.insert(messagesTable).values({
     conversationId: conv.id,
     senderId: aiUser.id,
@@ -208,6 +231,18 @@ router.patch("/conversations/:id", requireAuth, async (req, res): Promise<void> 
   res.json(await buildConversation(conv, me.id));
 });
 
+// Toggle AI for group chat
+router.post("/conversations/:id/toggle-ai", requireAuth, async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  const [conv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, id)).limit(1);
+  if (!conv) { res.status(404).json({ error: "Not found" }); return; }
+  const newState = !conv.aiEnabled;
+  const [updated] = await db.update(conversationsTable).set({ aiEnabled: newState }).where(eq(conversationsTable.id, id)).returning();
+  io.to(`conv:${id}`).emit("ai_toggled", { conversationId: id, aiEnabled: newState });
+  res.json({ aiEnabled: updated.aiEnabled });
+});
+
 router.get("/conversations/:id/messages", requireAuth, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
@@ -223,11 +258,11 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res): Promis
   const me = getUser(req);
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
-  const { content, imageUrl } = req.body;
-  if (content == null) { res.status(400).json({ error: "content required" }); return; }
+  const { content, imageUrl, voiceUrl } = req.body;
+  if (content == null && !voiceUrl) { res.status(400).json({ error: "content required" }); return; }
 
-  // Profanity filter on messages
-  if (containsProfanity(content)) {
+  // Profanity filter on messages (skip for voice messages)
+  if (content && containsProfanity(content)) {
     res.status(400).json({
       error: "HINDI PWEDE ANG MASAMANG SALITA ❌ — Your message contains inappropriate language!",
       profanity: true,
@@ -238,38 +273,45 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res): Promis
   const [msg] = await db.insert(messagesTable).values({
     conversationId: id,
     senderId: me.id,
-    content,
+    content: content ?? "",
     imageUrl: imageUrl ?? null,
+    voiceUrl: voiceUrl ?? null,
     seenBy: JSON.stringify([me.id]),
   }).returning();
   const built = await buildMessage(msg);
   io.to(`conv:${id}`).emit("message", built);
 
-  // Notify other participants
+  // Get conversation to check type + aiEnabled
+  const [conv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, id)).limit(1);
+
+  // Notify other participants + AI auto-reply logic
   const participants = await db.select().from(conversationParticipantsTable)
     .where(eq(conversationParticipantsTable.conversationId, id));
+
   for (const p of participants) {
     if (p.userId !== me.id) {
       const [pUser] = await db.select().from(usersTable).where(eq(usersTable.id, p.userId)).limit(1);
       if (pUser?.isBlueAI) {
-        // Auto-respond from BLUE AI after short delay
-        setTimeout(async () => {
-          const aiResponse = generateBlueAIResponse(content);
-          const [aiMsg] = await db.insert(messagesTable).values({
-            conversationId: id,
-            senderId: p.userId,
-            content: aiResponse,
-            seenBy: JSON.stringify([p.userId]),
-          }).returning();
-          const builtAi = await buildMessage(aiMsg);
-          io.to(`conv:${id}`).emit("message", builtAi);
-        }, 1200 + Math.random() * 800);
+        // DM with Blue AI — always reply
+        if (!voiceUrl) {
+          await triggerAIReply(id, content ?? "", imageUrl);
+        }
       } else {
         await db.insert(notificationsTable).values({ userId: p.userId, type: "message", fromUserId: me.id, conversationId: id });
         io.to(`user:${p.userId}`).emit("notification", { type: "message", conversationId: id });
       }
     }
   }
+
+  // Group chat AI auto-reply
+  if (conv?.type === "group" && !voiceUrl && content) {
+    const msgLower = content.toLowerCase();
+    const mentionsAI = /@blue|@blueai|@blue ai/i.test(content);
+    if (conv.aiEnabled || mentionsAI) {
+      await triggerAIReply(id, content, imageUrl);
+    }
+  }
+
   res.status(201).json(built);
 });
 

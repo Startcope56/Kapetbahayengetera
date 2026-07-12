@@ -20,7 +20,7 @@ const RANKS = ["Newbie", "Member", "Active", "Popular", "Influencer", "VIP", "Le
 export default function AdminPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [tab, setTab] = useState<"overview" | "users" | "reports" | "posts" | "settings" | "broadcast" | "follower-requests">("overview");
+  const [tab, setTab] = useState<"overview" | "users" | "reports" | "posts" | "settings" | "broadcast" | "follower-requests" | "teen-safety">("overview");
   const [users, setUsers] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
@@ -96,6 +96,7 @@ export default function AdminPage() {
     { id: "follower-requests", label: `Followers ${pendingFollowerReqs.length > 0 ? `(${pendingFollowerReqs.length})` : ""}`, icon: TrendingUp },
     { id: "reports", label: `Reports (${reports.filter(r => r.status === "pending").length})`, icon: AlertTriangle },
     { id: "posts", label: "Posts", icon: Shield },
+    { id: "teen-safety", label: "Teen Safety", icon: UserX },
     { id: "settings", label: "Settings", icon: Settings },
     { id: "broadcast", label: "Broadcast", icon: Bell },
   ];
@@ -479,6 +480,92 @@ export default function AdminPage() {
                 className={`relative w-12 h-6 rounded-full transition-colors ${settings.maintenance === "true" ? "bg-orange-500" : "bg-gray-300"}`}>
                 <div className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${settings.maintenance === "true" ? "left-7" : "left-1"}`} />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TEEN SAFETY ── */}
+      {tab === "teen-safety" && (
+        <div className="space-y-4">
+          <div className="bg-gradient-to-r from-pink-400 to-purple-500 rounded-2xl p-4 text-white">
+            <h3 className="font-black text-lg">🛡️ Teen Safety Dashboard</h3>
+            <p className="text-white/80 text-sm mt-0.5">Manage safety features for underage users</p>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: "Total Teens", value: users.filter(u => u.ageGroup === "teen").length || 0, icon: "👶", color: "bg-pink-50 text-pink-700" },
+              { label: "With Safety ON", value: 0, icon: "🛡️", color: "bg-green-50 text-green-700" },
+              { label: "Restricted Accounts", value: users.filter(u => u.restricted).length, icon: "⚠️", color: "bg-orange-50 text-orange-700" },
+            ].map(s => (
+              <div key={s.label} className={`${s.color} rounded-2xl p-3 text-center`}>
+                <p className="text-2xl mb-0.5">{s.icon}</p>
+                <p className="text-xl font-black">{s.value}</p>
+                <p className="text-[10px] font-semibold">{s.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Global Safety Controls */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+            <h4 className="font-bold text-gray-900">⚙️ Global Safety Settings</h4>
+            {[
+              { key: "teen_content_filter", label: "Force Content Filter for Teens", desc: "Apply strict content filtering for all accounts under 18" },
+              { key: "teen_chat_restriction", label: "Restrict Teen Chat", desc: "Teens can only message friends, not strangers" },
+              { key: "teen_post_approval", label: "Teen Post Review", desc: "Posts from teen accounts require admin review before publishing" },
+            ].map(s => (
+              <div key={s.key} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                <div className="flex-1 min-w-0 pr-3">
+                  <p className="font-semibold text-sm text-gray-800">{s.label}</p>
+                  <p className="text-xs text-gray-400">{s.desc}</p>
+                </div>
+                <button
+                  onClick={() => setSetting(s.key, settings[s.key] === "true" ? "false" : "true")}
+                  className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${settings[s.key] === "true" ? "bg-pink-500" : "bg-gray-300"}`}>
+                  <div className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${settings[s.key] === "true" ? "left-7" : "left-1"}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Users marked as restricted (proxy for teen accounts) */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <h4 className="font-bold text-gray-900 mb-3">👥 Restricted Users</h4>
+            {users.filter(u => u.restricted).length === 0 ? (
+              <p className="text-center text-gray-400 text-sm py-4">No restricted users ✅</p>
+            ) : (
+              <div className="space-y-2">
+                {users.filter(u => u.restricted).map(u => (
+                  <div key={u.id} className="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarImage src={u.profilePicture || undefined} />
+                      <AvatarFallback className="text-xs font-bold" style={{ background: "#1877f2", color: "white" }}>{u.name?.[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{u.name}</p>
+                      <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                    </div>
+                    <button onClick={() => action(`/admin/users/${u.id}/restrict`, { restricted: false })}
+                      className="px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold transition hover:bg-green-200">
+                      Unrestrict
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Safety Guidelines */}
+          <div className="bg-blue-50 rounded-2xl p-4">
+            <h4 className="font-bold text-blue-900 mb-2">📋 Blue Media Safety Guidelines</h4>
+            <div className="space-y-1.5 text-xs text-blue-700">
+              <p>• Zero tolerance sa bullying, harassment, at hate speech</p>
+              <p>• Teens (13-17) ay may limitadong access sa certain features</p>
+              <p>• Mga report ng inappropriate content ay pinoproseso sa loob ng 24hrs</p>
+              <p>• Parents at guardians ay maaaring mag-request ng account restrictions</p>
+              <p>• Ang Blue Media ay sumusuporta sa DSWD guidelines para sa kabataan</p>
             </div>
           </div>
         </div>

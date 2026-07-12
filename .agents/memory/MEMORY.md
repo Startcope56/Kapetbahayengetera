@@ -1,2 +1,5 @@
 - [Stories architecture](stories-arch.md) — real backend stories with iTunes music preview; DB tables storiesTable + storyViewsTable in lib/db/src/schema/posts.ts
 - [Auth middleware location](auth-middleware.md) — requireAuth and getUser live in artifacts/api-server/src/lib/auth.ts, NOT routes/auth.ts
+- [Blue AI Pollinations](blueai-pollinations.md) — blueai.ts calls Pollinations API (POST https://text.pollinations.ai/); no API key; supports text, image (base64 in content array), and history
+- [Voice messages](voice-messages.md) — voiceUrl column on messagesTable (pushed to DB); upload blob to /api/conversations/:id/messages/upload, send message with voiceUrl field; MediaRecorder API on frontend
+- [Group AI toggle](group-ai-toggle.md) — POST /conversations/:id/toggle-ai flips aiEnabled; ON=auto-reply all; OFF=reply only to @Blue/@blueai mentions; emits ai_toggled Socket.IO event

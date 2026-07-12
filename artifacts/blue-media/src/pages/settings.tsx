@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Lock, Eye, Bell, HelpCircle, BadgeCheck, ChevronRight,
-  LogOut, Palette, Globe, Shield, UserX, Trash2, Moon, Sun, Download, Star
+  LogOut, Palette, Globe, Shield, UserX, Download, Baby, ShieldAlert, Clock, UserCheck
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -81,6 +81,26 @@ export default function SettingsPage() {
     logout();
   };
 
+  const [teenSafety, setTeenSafety] = useState({
+    enabled: localStorage.getItem("bm_teen_safety") === "true",
+    contentFilter: localStorage.getItem("bm_content_filter") || "moderate",
+    screenTime: localStorage.getItem("bm_screen_time") || "no_limit",
+    requireParentApproval: localStorage.getItem("bm_parent_approval") === "true",
+    chatWithFriendsOnly: localStorage.getItem("bm_chat_friends_only") === "true",
+  });
+  const [parentPin, setParentPin] = useState("");
+  const [parentPinConfirm, setParentPinConfirm] = useState("");
+  const [savedParentPin, setSavedParentPin] = useState(localStorage.getItem("bm_parent_pin") || "");
+  const [parentPinInput, setParentPinInput] = useState("");
+  const [parentUnlocked, setParentUnlocked] = useState(false);
+
+  const saveTeenSafety = (updates: Partial<typeof teenSafety>) => {
+    const updated = { ...teenSafety, ...updates };
+    setTeenSafety(updated);
+    Object.entries(updates).forEach(([k, v]) => localStorage.setItem(`bm_${k === "enabled" ? "teen_safety" : k.replace(/([A-Z])/g, "_$1").toLowerCase()}`, String(v)));
+    toast({ title: "✅ Teen Safety settings saved!" });
+  };
+
   const menuSections = [
     {
       title: "Account",
@@ -88,6 +108,13 @@ export default function SettingsPage() {
         { id: "pin", icon: Lock, color: "text-blue-500", bg: "bg-blue-50", title: "Palitan ang PIN", subtitle: "I-update ang iyong 4-digit na PIN" },
         { id: "privacy", icon: Eye, color: "text-green-500", bg: "bg-green-50", title: "Privacy", subtitle: user?.privacy === "friends" ? "Mga kaibigan lang" : "Publiko" },
         { id: "badge", icon: BadgeCheck, color: "text-indigo-500", bg: "bg-indigo-50", title: "Blue Badge", subtitle: user?.blueBadge ? "✓ Verified ka na!" : "I-claim ang iyong badge" },
+      ]
+    },
+    {
+      title: "Safety & Family",
+      items: [
+        { id: "teen-safety", icon: Baby, color: "text-pink-500", bg: "bg-pink-50", title: "Teen Safety", subtitle: teenSafety.enabled ? "🛡️ Aktibo" : "Para sa mga kabataan" },
+        { id: "parent-guardian", icon: ShieldAlert, color: "text-purple-500", bg: "bg-purple-50", title: "Parent / Guardian Control", subtitle: "I-manage ang account ng anak" },
       ]
     },
     {
@@ -161,7 +188,8 @@ export default function SettingsPage() {
 
       <div className="text-center text-xs text-gray-300 pt-1">
         <p className="font-bold text-blue-400">BLUE MEDIA</p>
-        <p>Version 1.0.0 · Para sa Pilipinas 🇵🇭</p>
+        <p className="text-[10px]">By JV Channel (Jonathan Villanueva) · Para sa Pilipinas 🇵🇭</p>
+        <p className="text-[10px]">Version 2.0.0</p>
       </div>
 
       {/* ── Change PIN ── */}
@@ -370,6 +398,213 @@ export default function SettingsPage() {
               <Button variant="outline" className="flex-1" onClick={() => setSection(null)}>Kanselahin</Button>
               <Button variant="destructive" className="flex-1" onClick={() => { setSection(null); toast({ title: "Request submitted", description: "Ipinadala na ang iyong request sa admin team." }); }}>Ipadala ang Request</Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Teen Safety ── */}
+      <Dialog open={section === "teen-safety"} onOpenChange={o => !o && setSection(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Teen Safety 🛡️👶</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-pink-50 rounded-xl p-3">
+              <p className="text-xs text-pink-700 font-medium">Para sa mga users na 13-17 taong gulang. Protektahan ang kabataan sa Blue Media.</p>
+            </div>
+
+            {/* Master toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm text-gray-800">I-enable ang Teen Safety</p>
+                <p className="text-xs text-gray-400">I-on ang lahat ng proteksyon</p>
+              </div>
+              <Switch checked={teenSafety.enabled} onCheckedChange={v => saveTeenSafety({ enabled: v })} />
+            </div>
+
+            {teenSafety.enabled && (
+              <>
+                {/* Content filter */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-2">🔍 Content Filter</p>
+                  <div className="space-y-1.5">
+                    {[
+                      { value: "strict", label: "Mahigpit (Strict)", sub: "Ang lahat ng sensitive content ay hindi makikita" },
+                      { value: "moderate", label: "Katamtaman (Moderate)", sub: "Basic na filter ng inappropriate content" },
+                    ].map(f => (
+                      <button key={f.value} onClick={() => saveTeenSafety({ contentFilter: f.value })}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl border-2 transition text-sm ${teenSafety.contentFilter === f.value ? "border-pink-400 bg-pink-50" : "border-gray-200"}`}>
+                        <p className="font-semibold">{f.label}</p>
+                        <p className="text-xs text-gray-500">{f.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Screen time */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-2">⏱️ Screen Time Limit</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { value: "30min", label: "30 minuto" },
+                      { value: "1hr", label: "1 oras" },
+                      { value: "2hr", label: "2 oras" },
+                      { value: "no_limit", label: "Walang limit" },
+                    ].map(t => (
+                      <button key={t.value} onClick={() => saveTeenSafety({ screenTime: t.value })}
+                        className={`px-3 py-2 rounded-xl border-2 text-xs font-semibold transition ${teenSafety.screenTime === t.value ? "border-pink-400 bg-pink-50 text-pink-700" : "border-gray-200 text-gray-600"}`}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Chat restriction */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-sm text-gray-800">💬 Chat sa Friends lang</p>
+                    <p className="text-xs text-gray-400">Hindi makakatanggap ng mensahe mula sa strangers</p>
+                  </div>
+                  <Switch checked={teenSafety.chatWithFriendsOnly} onCheckedChange={v => saveTeenSafety({ chatWithFriendsOnly: v })} />
+                </div>
+
+                {/* Parent approval */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-sm text-gray-800">👪 Parent Approval</p>
+                    <p className="text-xs text-gray-400">Kailangan ng approval ng magulang para sa mga bagong kaibigan</p>
+                  </div>
+                  <Switch checked={teenSafety.requireParentApproval} onCheckedChange={v => saveTeenSafety({ requireParentApproval: v })} />
+                </div>
+              </>
+            )}
+
+            <div className="bg-blue-50 rounded-xl p-3">
+              <p className="text-xs text-blue-700">💙 Ang Blue Media ay dedicated sa kaligtasan ng bawat user. Para sa mga concern, makipag-ugnayan sa admin.</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Parent Guardian ── */}
+      <Dialog open={section === "parent-guardian"} onOpenChange={o => !o && setSection(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Parent / Guardian Control 👪🔐</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            {!savedParentPin && !parentUnlocked ? (
+              <div className="space-y-3">
+                <div className="bg-purple-50 rounded-xl p-3">
+                  <p className="text-xs text-purple-700 font-medium">Gumawa ng Parent PIN para masigurong ikaw lang ang makakabago ng mga Teen Safety settings.</p>
+                </div>
+                <div>
+                  <Label>Bagong Parent PIN (4 digits)</Label>
+                  <Input type="password" maxLength={4} inputMode="numeric" placeholder="••••" value={parentPin} onChange={e => setParentPin(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Kumpirmahin ang Parent PIN</Label>
+                  <Input type="password" maxLength={4} inputMode="numeric" placeholder="••••" value={parentPinConfirm} onChange={e => setParentPinConfirm(e.target.value)} className="mt-1" />
+                </div>
+                <Button className="w-full" onClick={() => {
+                  if (parentPin.length !== 4) { toast({ title: "4 digits ang kailangan", variant: "destructive" }); return; }
+                  if (parentPin !== parentPinConfirm) { toast({ title: "Hindi magkatugma ang PIN", variant: "destructive" }); return; }
+                  localStorage.setItem("bm_parent_pin", parentPin);
+                  setSavedParentPin(parentPin);
+                  setParentUnlocked(true);
+                  setParentPin("");
+                  setParentPinConfirm("");
+                  toast({ title: "✅ Parent PIN na-set!" });
+                }}>I-set ang Parent PIN</Button>
+              </div>
+            ) : !parentUnlocked ? (
+              <div className="space-y-3">
+                <div className="bg-purple-50 rounded-xl p-3 text-center">
+                  <p className="text-4xl mb-2">🔐</p>
+                  <p className="text-sm font-semibold text-purple-800">Parent PIN Required</p>
+                  <p className="text-xs text-purple-600 mt-1">I-enter ang Parent PIN para ma-access ang mga controls</p>
+                </div>
+                <Input type="password" maxLength={4} inputMode="numeric" placeholder="Enter Parent PIN" value={parentPinInput} onChange={e => setParentPinInput(e.target.value)} className="text-center text-2xl tracking-widest" />
+                <Button className="w-full" onClick={() => {
+                  if (parentPinInput === savedParentPin) { setParentUnlocked(true); setParentPinInput(""); toast({ title: "✅ Parent access granted!" }); }
+                  else { toast({ title: "Mali ang PIN", variant: "destructive" }); setParentPinInput(""); }
+                }}>I-unlock</Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="bg-green-50 rounded-xl p-3 flex items-center gap-2">
+                  <UserCheck className="h-5 w-5 text-green-600 shrink-0" />
+                  <p className="text-sm text-green-700 font-semibold">Parent / Guardian mode — na-unlock!</p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-bold text-gray-700">👶 Teen Account Settings</p>
+
+                  <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
+                    <div>
+                      <p className="text-sm font-semibold">Teen Safety Mode</p>
+                      <p className="text-xs text-gray-400">{teenSafety.enabled ? "🟢 Aktibo" : "🔴 Hindi aktibo"}</p>
+                    </div>
+                    <Switch checked={teenSafety.enabled} onCheckedChange={v => saveTeenSafety({ enabled: v })} />
+                  </div>
+
+                  <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
+                    <div>
+                      <p className="text-sm font-semibold">Chat sa Friends lang</p>
+                      <p className="text-xs text-gray-400">{teenSafety.chatWithFriendsOnly ? "🟢 Aktibo" : "🔴 Hindi aktibo"}</p>
+                    </div>
+                    <Switch checked={teenSafety.chatWithFriendsOnly} onCheckedChange={v => saveTeenSafety({ chatWithFriendsOnly: v })} />
+                  </div>
+
+                  <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
+                    <div>
+                      <p className="text-sm font-semibold">Approval ng Magulang</p>
+                      <p className="text-xs text-gray-400">Para sa bagong kaibigan</p>
+                    </div>
+                    <Switch checked={teenSafety.requireParentApproval} onCheckedChange={v => saveTeenSafety({ requireParentApproval: v })} />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-semibold mb-1.5">⏱️ Screen Time Limit</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { value: "30min", label: "30 min" },
+                        { value: "1hr", label: "1 oras" },
+                        { value: "2hr", label: "2 oras" },
+                        { value: "no_limit", label: "Walang limit" },
+                      ].map(t => (
+                        <button key={t.value} onClick={() => saveTeenSafety({ screenTime: t.value })}
+                          className={`px-3 py-2 rounded-xl border-2 text-xs font-semibold transition ${teenSafety.screenTime === t.value ? "border-purple-400 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-600"}`}>
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-semibold mb-1.5">🔍 Content Filter Level</p>
+                    <div className="space-y-1.5">
+                      {[
+                        { value: "strict", label: "Mahigpit" },
+                        { value: "moderate", label: "Katamtaman" },
+                      ].map(f => (
+                        <button key={f.value} onClick={() => saveTeenSafety({ contentFilter: f.value })}
+                          className={`w-full text-left px-3 py-2 rounded-xl border-2 transition text-sm font-semibold ${teenSafety.contentFilter === f.value ? "border-purple-400 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-600"}`}>
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-gray-100">
+                  <button onClick={() => {
+                    localStorage.removeItem("bm_parent_pin");
+                    setSavedParentPin("");
+                    setParentUnlocked(false);
+                    toast({ title: "Parent PIN na-reset" });
+                  }} className="text-xs text-red-500 hover:text-red-700 font-medium">
+                    🔄 I-reset ang Parent PIN
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -9,7 +9,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Image as ImageIcon, Send, Users, Phone, Video, Mic, MicOff, VideoOff, PhoneOff, X, UserPlus, Search, SmilePlus } from "lucide-react";
+import { ArrowLeft, Image as ImageIcon, Send, Users, Phone, Video, Mic, MicOff, VideoOff, PhoneOff, X, UserPlus, Search, Bot, BotOff } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { useQueryClient } from "@tanstack/react-query";
 import { uploadFile } from "@/lib/upload";
@@ -19,7 +19,6 @@ import { useToast } from "@/hooks/use-toast";
 
 const EMOJIS = ["🩷", "⭐", "💔", "💤", "😆", "🔥", "👍", "😮"];
 
-// ─── Call overlay ────────────────────────────────────────────────────────────
 type CallState = "idle" | "calling" | "ringing" | "active" | "ended";
 
 interface CallOverlayProps {
@@ -66,7 +65,6 @@ function CallOverlay({
 
   return (
     <div className="fixed inset-0 z-[100] bg-gray-900 flex flex-col">
-      {/* Remote / partner view */}
       <div className="flex-1 relative flex items-center justify-center">
         {type === "video" && remoteStream && !isCameraOff ? (
           <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
@@ -84,8 +82,6 @@ function CallOverlay({
             </p>
           </div>
         )}
-
-        {/* Local camera preview */}
         {type === "video" && localStream && (
           <div className="absolute top-4 right-4 w-28 h-40 rounded-xl overflow-hidden border-2 border-white/30 shadow-xl">
             <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={effectStyle} />
@@ -97,8 +93,6 @@ function CallOverlay({
           </div>
         )}
       </div>
-
-      {/* Controls */}
       <div className="bg-gray-900/90 backdrop-blur-sm p-6 flex flex-col gap-4">
         {state === "ringing" ? (
           <div className="flex justify-center gap-12">
@@ -145,7 +139,6 @@ function CallOverlay({
   );
 }
 
-// ─── Add Member Modal ─────────────────────────────────────────────────────────
 function AddMemberModal({ convId, onClose }: { convId: number; onClose: () => void }) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<any[]>([]);
@@ -205,7 +198,112 @@ function AddMemberModal({ convId, onClose }: { convId: number; onClose: () => vo
   );
 }
 
-// ─── Main Chat Room ───────────────────────────────────────────────────────────
+// Voice message recorder component
+function VoiceRecorder({ onSend, disabled }: { onSend: (blob: Blob) => void; disabled?: boolean }) {
+  const [recording, setRecording] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<any>(null);
+  const { toast } = useToast();
+
+  const start = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+      recorder.ondataavailable = e => chunksRef.current.push(e.data);
+      recorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        onSend(blob);
+        setDuration(0);
+      };
+      recorder.start();
+      setRecording(true);
+      setDuration(0);
+      timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+    } catch {
+      toast({ title: "Cannot access microphone", description: "Check your browser permissions.", variant: "destructive" });
+    }
+  };
+
+  const stop = () => {
+    clearInterval(timerRef.current);
+    recorderRef.current?.stop();
+    setRecording(false);
+  };
+
+  const cancel = () => {
+    clearInterval(timerRef.current);
+    recorderRef.current?.stream?.getTracks().forEach(t => t.stop());
+    if (recorderRef.current?.state !== "inactive") {
+      recorderRef.current!.ondataavailable = null;
+      recorderRef.current!.onstop = null;
+      recorderRef.current?.stop();
+    }
+    setRecording(false);
+    setDuration(0);
+  };
+
+  if (recording) {
+    return (
+      <div className="flex items-center gap-2 bg-red-50 rounded-full px-3 py-1.5">
+        <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+        <span className="text-xs text-red-600 font-medium tabular-nums">{Math.floor(duration / 60)}:{String(duration % 60).padStart(2, "0")}</span>
+        <button onClick={cancel} className="text-gray-400 hover:text-gray-600 ml-1"><X className="h-3.5 w-3.5" /></button>
+        <button onClick={stop} className="h-7 w-7 rounded-full bg-red-500 text-white flex items-center justify-center">
+          <Send className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button onClick={start} disabled={disabled}
+      className="h-9 w-9 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition shrink-0 disabled:opacity-40">
+      <Mic className="h-4 w-4" />
+    </button>
+  );
+}
+
+// Audio message player
+function VoiceMessagePlayer({ src, isMine }: { src: string; isMine: boolean }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const toggle = () => {
+    if (!audioRef.current) return;
+    if (playing) { audioRef.current.pause(); setPlaying(false); }
+    else { audioRef.current.play(); setPlaying(true); }
+  };
+
+  return (
+    <div className={`flex items-center gap-2 min-w-[160px] ${isMine ? "flex-row-reverse" : ""}`}>
+      <audio ref={audioRef} src={src}
+        onEnded={() => { setPlaying(false); setProgress(0); }}
+        onTimeUpdate={() => { if (audioRef.current) setProgress((audioRef.current.currentTime / (audioRef.current.duration || 1)) * 100); }}
+        onLoadedMetadata={() => { if (audioRef.current) setDuration(audioRef.current.duration); }}
+      />
+      <button onClick={toggle}
+        className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${isMine ? "bg-white/20" : "bg-blue-100"}`}>
+        {playing ? "⏸" : "▶️"}
+      </button>
+      <div className="flex-1 flex flex-col gap-0.5">
+        <div className="relative h-1.5 bg-white/30 rounded-full overflow-hidden">
+          <div className="absolute left-0 top-0 h-full bg-current rounded-full transition-all" style={{ width: `${progress}%` }} />
+        </div>
+        <span className="text-[9px] opacity-60 tabular-nums">
+          {duration ? `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, "0")}` : "🎤 Voice"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatRoomPage() {
   const { id } = useParams<{ id: string }>();
   const convId = parseInt(id || "0", 10);
@@ -213,7 +311,6 @@ export default function ChatRoomPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Parse URL params for answering incoming calls redirected from global handler
   const urlParams = new URLSearchParams(window.location.search);
   const shouldAnswer = urlParams.get("answering") === "1";
   const urlCallType = (urlParams.get("callType") as "voice" | "video") || "voice";
@@ -227,8 +324,9 @@ export default function ChatRoomPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
+  const [togglingAI, setTogglingAI] = useState(false);
 
-  // Call state
   const [callType, setCallType] = useState<"voice" | "video">("voice");
   const [callState, setCallState] = useState<CallState>("idle");
   const [callPartnerId, setCallPartnerId] = useState<number | null>(null);
@@ -240,13 +338,10 @@ export default function ChatRoomPage() {
   const [incomingCall, setIncomingCall] = useState<{ from: number; type: "voice" | "video"; name: string; avatar?: string } | null>(
     shouldAnswer && urlCallFrom ? { from: urlCallFrom, type: urlCallType, name: urlCallerName, avatar: urlCallerAvatar } : null
   );
-  const callRingtoneRef = useRef<HTMLAudioElement | null>(null);
 
-  // Auto-answer if navigated here from global call popup
   useEffect(() => {
     if (shouldAnswer && urlCallFrom) {
       setCallState("ringing");
-      // Clean up URL params without reload
       const url = new URL(window.location.href);
       url.searchParams.delete("answering");
       url.searchParams.delete("callType");
@@ -268,7 +363,29 @@ export default function ChatRoomPage() {
   const name = isGroup ? conv?.name : otherParticipant?.name || "Unknown";
   const avatar = isGroup ? conv?.pictureUrl : otherParticipant?.profilePicture;
 
-  // Socket: messages + calls
+  // Sync aiEnabled from conv
+  useEffect(() => {
+    if (conv && isGroup && aiEnabled === null) {
+      setAiEnabled(!!(conv as any).aiEnabled);
+    }
+  }, [conv, isGroup]);
+
+  const toggleAI = async () => {
+    setTogglingAI(true);
+    try {
+      const res = await fetch(`/api/conversations/${convId}/toggle-ai`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiEnabled(data.aiEnabled);
+        toast({ title: data.aiEnabled ? "🤖 BLUE AI naka-ON! Auto-reply activated." : "🤖 BLUE AI naka-OFF. Tag @Blue para humingi ng tulong." });
+      }
+    } catch { toast({ title: "Failed to toggle AI", variant: "destructive" }); }
+    setTogglingAI(false);
+  };
+
   useEffect(() => {
     if (!token) return;
     const socket = getSocket(token);
@@ -283,7 +400,10 @@ export default function ChatRoomPage() {
     socket.on("message_seen", handleMsg);
     socket.on("message_updated", handleMsg);
 
-    // Incoming call signalling
+    socket.on("ai_toggled", ({ aiEnabled: newState }: any) => {
+      setAiEnabled(newState);
+    });
+
     socket.on("call_incoming", ({ from, type, name: fromName, avatar: fromAvatar }: any) => {
       setIncomingCall({ from, type, name: fromName, avatar: fromAvatar });
       setCallState("ringing");
@@ -301,6 +421,7 @@ export default function ChatRoomPage() {
       socket.off("message", handleMsg);
       socket.off("message_seen", handleMsg);
       socket.off("message_updated", handleMsg);
+      socket.off("ai_toggled");
       socket.off("call_incoming");
       socket.off("call_answered");
       socket.off("call_ended");
@@ -312,7 +433,6 @@ export default function ChatRoomPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Call logic
   const startCall = async (type: "voice" | "video") => {
     setCallType(type);
     try {
@@ -411,6 +531,29 @@ export default function ChatRoomPage() {
     }
   };
 
+  const handleVoiceSend = async (blob: Blob) => {
+    if (!token) return;
+    try {
+      const formData = new FormData();
+      formData.append("file", blob, `voice-${Date.now()}.webm`);
+      const uploadRes = await fetch(`/api/conversations/${convId}/messages/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const { url } = await uploadRes.json();
+      await fetch(`/api/conversations/${convId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: "🎤 Voice message", voiceUrl: url }),
+      });
+      queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(convId) });
+    } catch {
+      toast({ title: "Failed to send voice message", variant: "destructive" });
+    }
+  };
+
   const handleReact = async (msgId: number, emoji: string) => {
     await reactToMsg.mutateAsync({ id: convId, msgId, data: { emoji } });
     queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(convId) });
@@ -420,7 +563,6 @@ export default function ChatRoomPage() {
 
   return (
     <>
-      {/* ── Call overlay ── */}
       {(callState !== "idle" || incomingCall) && (
         <CallOverlay
           type={incomingCall?.type ?? callType}
@@ -464,12 +606,42 @@ export default function ChatRoomPage() {
             )}
             <div className="min-w-0">
               <h2 className="font-semibold text-sm leading-none truncate">{name}</h2>
-              {isGroup && <span className="text-xs text-gray-400">{conv.participants?.length} members</span>}
+              {isGroup && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-400">{conv.participants?.length} members</span>
+                  {aiEnabled !== null && (
+                    <span className={`text-[9px] px-1 rounded font-bold ${aiEnabled ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}>
+                      {aiEnabled ? "🤖 AI ON" : "🤖 AI OFF"}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Action buttons */}
           <div className="flex items-center gap-1 shrink-0">
+            {isGroup && (
+              <>
+                {/* AI toggle */}
+                <button
+                  onClick={toggleAI}
+                  disabled={togglingAI}
+                  title={aiEnabled ? "Turn off Blue AI auto-reply" : "Turn on Blue AI auto-reply"}
+                  className={`h-9 w-9 rounded-full flex items-center justify-center transition ${
+                    aiEnabled ? "bg-blue-100 text-blue-600 hover:bg-blue-200" : "text-gray-400 hover:bg-gray-100"
+                  }`}>
+                  {aiEnabled ? <Bot className="h-4 w-4" /> : <BotOff className="h-4 w-4" />}
+                </button>
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-blue-600 hover:bg-blue-50"
+                  onClick={() => startCall("video")} title="Group video call">
+                  <Video className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-gray-500 hover:bg-gray-100"
+                  onClick={() => setShowAddMember(true)} title="Add member">
+                  <UserPlus className="h-4 w-4" />
+                </Button>
+              </>
+            )}
             {!isGroup && (
               <>
                 <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-blue-600 hover:bg-blue-50"
@@ -482,20 +654,18 @@ export default function ChatRoomPage() {
                 </Button>
               </>
             )}
-            {isGroup && (
-              <>
-                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-blue-600 hover:bg-blue-50"
-                  onClick={() => startCall("video")} title="Group video call">
-                  <Video className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-gray-500 hover:bg-gray-100"
-                  onClick={() => setShowAddMember(true)} title="Add member">
-                  <UserPlus className="h-4 w-4" />
-                </Button>
-              </>
-            )}
           </div>
         </div>
+
+        {/* AI banner for group */}
+        {isGroup && aiEnabled !== null && (
+          <div className={`px-3 py-1.5 flex items-center gap-2 text-xs font-medium ${aiEnabled ? "bg-blue-50 text-blue-700" : "bg-gray-50 text-gray-500"}`}>
+            <Bot className="h-3.5 w-3.5 shrink-0" />
+            {aiEnabled
+              ? "🤖 BLUE AI ay naka-ON — automatic na mag-rereply sa lahat ng mensahe"
+              : "🤖 BLUE AI ay naka-OFF — i-tag ang @Blue para humingi ng tulong"}
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3"
@@ -504,6 +674,7 @@ export default function ChatRoomPage() {
             const isMine = msg.senderId === user?.id;
             const showName = isGroup && !isMine && (i === 0 || messages[i - 1].senderId !== msg.senderId);
             const isAI = msg.sender?.isBlueAI;
+            const isVoice = !!msg.voiceUrl;
 
             return (
               <div key={msg.id} className={`flex flex-col ${isMine ? "items-end" : "items-start"}`}>
@@ -514,7 +685,6 @@ export default function ChatRoomPage() {
                   </div>
                 )}
 
-                {/* Reply preview */}
                 {msg.replyToId && (
                   <div className={`text-xs px-3 py-1.5 mb-1 rounded-lg border-l-2 border-blue-400 bg-gray-100 max-w-[70%] text-gray-500 truncate ${isMine ? "mr-1" : "ml-1"}`}>
                     Replying to a message
@@ -525,7 +695,7 @@ export default function ChatRoomPage() {
                   {!isMine && (
                     <Avatar className="h-6 w-6 shrink-0 mb-1">
                       <AvatarImage src={msg.sender?.profilePicture || undefined} />
-                      <AvatarFallback className="text-[9px] font-bold" style={{ background: isAI ? "#1877f2" : "#6b7280", color: "white" }}>
+                      <AvatarFallback className="text-[10px] font-bold" style={{ background: isAI ? "#1877f2" : "#9ca3af", color: "white" }}>
                         {isAI ? "AI" : msg.sender?.name?.[0]}
                       </AvatarFallback>
                     </Avatar>
@@ -544,8 +714,14 @@ export default function ChatRoomPage() {
                             <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wide">BLUE AI 💙</span>
                           </div>
                         )}
-                        {msg.imageUrl && <img src={msg.imageUrl} alt="attached" className="max-w-[200px] rounded-lg mb-2 object-cover" />}
-                        <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
+                        {msg.imageUrl && !isVoice && (
+                          <img src={msg.imageUrl} alt="attached" className="max-w-[200px] rounded-lg mb-2 object-cover" />
+                        )}
+                        {isVoice ? (
+                          <VoiceMessagePlayer src={msg.voiceUrl} isMine={isMine} />
+                        ) : (
+                          <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
+                        )}
                         {msg.reactions?.length > 0 && (
                           <div className={`absolute -bottom-3 ${isMine ? "right-2" : "left-2"} bg-white border border-gray-100 rounded-full px-1.5 py-0.5 text-[11px] flex shadow-sm gap-0.5`}>
                             {msg.reactions.slice(0, 3).map((r: any) => <span key={r.id}>{r.emoji}</span>)}
@@ -582,9 +758,8 @@ export default function ChatRoomPage() {
 
         {/* Input */}
         <div className="p-3 bg-white border-t">
-          {/* Reply banner */}
           {replyTo && (
-            <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-1.5 mb-2 border-l-3 border-blue-400">
+            <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-1.5 mb-2 border-l-2 border-blue-400">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-blue-600">{replyTo.sender?.name}</p>
                 <p className="text-xs text-gray-600 truncate">{replyTo.content}</p>
@@ -612,10 +787,14 @@ export default function ChatRoomPage() {
               onClick={() => fileInputRef.current?.click()}>
               <ImageIcon className="h-4 w-4" />
             </Button>
+
+            {/* Voice recorder */}
+            <VoiceRecorder onSend={handleVoiceSend} disabled={sendMessage.isPending} />
+
             <div className="flex-1 flex items-center bg-gray-100 rounded-full px-3 py-2 gap-2">
               <input
                 className="flex-1 bg-transparent text-sm outline-none text-gray-800 placeholder-gray-400"
-                placeholder={`Message ${name}...`}
+                placeholder={isGroup && aiEnabled === false ? `Message ${name}... (tag @Blue for AI)` : `Message ${name}...`}
                 value={message}
                 onChange={e => setMessage(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e); } }}

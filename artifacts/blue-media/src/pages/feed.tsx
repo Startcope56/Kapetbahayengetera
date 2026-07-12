@@ -249,6 +249,10 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isSaved, setIsSaved] = useState(() => {
+    const saved: number[] = JSON.parse(localStorage.getItem("bm_saved_posts") || "[]");
+    return saved.includes(post.id);
+  });
   const queryClient = useQueryClient();
   const { toast, } = useToast();
   const { token } = useAuth();
@@ -491,9 +495,27 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
           <span>Comment</span>
         </button>
 
-        <button className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 transition active:scale-95">
-          <Share2 className="h-4 w-4" />
-          <span>Share</span>
+        <button
+          onClick={() => {
+            const saved: number[] = JSON.parse(localStorage.getItem("bm_saved_posts") || "[]");
+            if (isSaved) {
+              const updated = saved.filter(id => id !== post.id);
+              localStorage.setItem("bm_saved_posts", JSON.stringify(updated));
+              setIsSaved(false);
+              toast({ title: "Removed from saved posts" });
+            } else {
+              saved.push(post.id);
+              localStorage.setItem("bm_saved_posts", JSON.stringify(saved));
+              setIsSaved(true);
+              toast({ title: "💾 Post saved!" });
+            }
+          }}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium transition active:scale-95 ${
+            isSaved ? "text-yellow-600 bg-yellow-50" : "text-gray-500 hover:bg-gray-100"
+          }`}
+        >
+          <span className="text-base">{isSaved ? "🔖" : "🔖"}</span>
+          <span>{isSaved ? "Saved" : "Save"}</span>
         </button>
       </div>
 
