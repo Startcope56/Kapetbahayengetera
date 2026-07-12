@@ -5,3 +5,4 @@ export * from "./conversations";
 export * from "./notifications";
 export * from "./follows";
 export * from "./reports";
+export { storiesTable, storyViewsTable } from "./posts";

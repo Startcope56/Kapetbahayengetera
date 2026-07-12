@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const postsTable = pgTable("posts", {
@@ -45,7 +45,30 @@ export const postViewsTable = pgTable("post_views", {
   viewedAt: timestamp("viewed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const storiesTable = pgTable("stories", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  imageUrl: text("image_url"),
+  text: text("text"),
+  bgColor: text("bg_color"),
+  musicTitle: text("music_title"),
+  musicArtist: text("music_artist"),
+  musicPreviewUrl: text("music_preview_url"),
+  musicArtwork: text("music_artwork"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const storyViewsTable = pgTable("story_views", {
+  id: serial("id").primaryKey(),
+  storyId: integer("story_id").notNull().references(() => storiesTable.id, { onDelete: "cascade" }),
+  viewerId: integer("viewer_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  viewedAt: timestamp("viewed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Post = typeof postsTable.$inferSelect;
 export type PostReaction = typeof postReactionsTable.$inferSelect;
 export type PostComment = typeof postCommentsTable.$inferSelect;
 export type PostView = typeof postViewsTable.$inferSelect;
+export type Story = typeof storiesTable.$inferSelect;
+export type StoryView = typeof storyViewsTable.$inferSelect;

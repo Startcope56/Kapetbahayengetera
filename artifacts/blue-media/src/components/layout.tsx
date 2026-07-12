@@ -30,7 +30,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const moreMenuItems = [
     { icon: BarChart3, href: "/dashboard", label: "My Dashboard", color: "bg-blue-100", iconColor: "text-blue-600" },
-    { icon: UserPlus, href: "/request-followers", label: "Request Followers 📊", color: "bg-indigo-100", iconColor: "text-indigo-600" },
+
     { icon: Users, href: "/friends", label: "Friends", color: "bg-green-100", iconColor: "text-green-600" },
     { icon: Compass, href: "/explore", label: "Explore 🔍", color: "bg-sky-100", iconColor: "text-sky-600" },
     { icon: Sparkles, href: "/ai", label: "Blue AI 🤖", color: "bg-cyan-100", iconColor: "text-cyan-600" },

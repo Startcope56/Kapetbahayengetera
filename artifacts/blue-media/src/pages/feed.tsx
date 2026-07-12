@@ -19,10 +19,7 @@ import { Button } from "@/components/ui/button";
 import { StoriesBar } from "@/pages/stories";
 
 const REACTIONS = [
-  { type: "heart", emoji: "🩷", label: "Love" },
-  { type: "laugh", emoji: "😆", label: "Haha" },
-  { type: "cry",   emoji: "💔", label: "Sad" },
-  { type: "angry", emoji: "😡", label: "Angry" },
+  { type: "heart", emoji: "❤️", label: "Love" },
 ];
 
 const BG_COLORS = [
@@ -206,22 +203,7 @@ function CommentSection({ postId }: { postId: number }) {
   );
 }
 
-function ReactionPicker({ onPick }: { onPick: (type: string) => void }) {
-  return (
-    <div className="absolute bottom-full left-0 mb-1 bg-white border border-gray-200 rounded-2xl shadow-xl px-2 py-1.5 flex gap-1 z-20">
-      {REACTIONS.map(r => (
-        <button
-          key={r.type}
-          onPointerDown={e => { e.preventDefault(); onPick(r.type); }}
-          className="text-2xl hover:scale-125 transition-transform p-0.5"
-          title={r.label}
-        >
-          {r.emoji}
-        </button>
-      ))}
-    </div>
-  );
-}
+// Single heart reaction — no picker needed
 
 function VideoPlayer({ src }: { src: string }) {
   const [playing, setPlaying] = useState(false);
@@ -263,7 +245,6 @@ function VideoPlayer({ src }: { src: string }) {
 
 function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: number; isAdmin: boolean }) {
   const [showComments, setShowComments] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
@@ -275,7 +256,6 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
   const unreactPost = useRemovePostReaction();
   const deletePost = useDeletePost();
   const reportPost = useReportPost();
-  const pickerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isOwnPost = post.userId === currentUserId;
@@ -297,23 +277,12 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
   };
 
   const toggleReaction = async (type: string) => {
-    setShowPicker(false);
     if (post.myReaction === type) {
       await unreactPost.mutateAsync({ id: post.id });
     } else {
       await reactPost.mutateAsync({ id: post.id, data: { type: type as ReactionInputType } });
     }
     queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
-  };
-
-  const handleReactPress = () => {
-    if (post.myReaction) {
-      unreactPost.mutateAsync({ id: post.id }).then(() =>
-        queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() })
-      );
-    } else {
-      setShowPicker(v => !v);
-    }
   };
 
   const handleDelete = async () => {
@@ -340,15 +309,6 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
   };
 
   useEffect(() => {
-    if (!showPicker) return;
-    const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showPicker]);
-
-  useEffect(() => {
     if (!showMenu) return;
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
@@ -358,7 +318,6 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
   }, [showMenu]);
 
   const totalReactions = post.reactions?.reduce((s: number, r: any) => s + r.count, 0) ?? 0;
-  const myReactionEmoji = REACTIONS.find(r => r.type === post.myReaction)?.emoji;
   const hasBgColor = !!post.bgColor;
   const feelingInfo = post.feeling ? FEELINGS.find(f => f.value === post.feeling) : null;
   const activityInfo = post.activity ? ACTIVITIES.find(a => a.value === post.activity) : null;
@@ -492,38 +451,35 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
       )}
 
       {/* Reaction counts */}
-      {totalReactions > 0 && (
-        <div className="px-4 py-1.5 flex items-center gap-1">
-          <div className="flex -space-x-1">
-            {post.reactions?.filter((r: any) => r.count > 0).slice(0, 3).map((r: any) => (
-              <span key={r.type} className="text-sm">{REACTIONS.find(x => x.type === r.type)?.emoji}</span>
-            ))}
-          </div>
-          <span className="text-xs text-gray-400 ml-1">{totalReactions}</span>
-          <button
-            className="ml-auto text-xs text-gray-400 hover:underline"
-            onClick={() => setShowComments(v => !v)}
-          >
-            {post.commentCount > 0 ? `${post.commentCount} comment${post.commentCount > 1 ? "s" : ""}` : ""}
-          </button>
+      {(totalReactions > 0 || post.commentCount > 0) && (
+        <div className="px-4 py-1.5 flex items-center gap-1.5">
+          {totalReactions > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="text-sm">❤️</span>
+              <span className="text-xs text-gray-500 font-medium">{totalReactions.toLocaleString()}</span>
+            </div>
+          )}
+          {post.commentCount > 0 && (
+            <button className="ml-auto text-xs text-gray-400 hover:underline hover:text-blue-500"
+              onClick={() => setShowComments(v => !v)}>
+              {post.commentCount} comment{post.commentCount > 1 ? "s" : ""}
+            </button>
+          )}
         </div>
       )}
 
       {/* Action Buttons */}
       <div className="border-t border-gray-100 mx-4" />
       <div className="flex px-2 py-1">
-        <div className="relative flex-1" ref={pickerRef}>
-          {showPicker && <ReactionPicker onPick={toggleReaction} />}
-          <button
-            onClick={handleReactPress}
-            className={`w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium transition active:scale-95 ${
-              post.myReaction ? "text-blue-600 bg-blue-50" : "text-gray-500 hover:bg-gray-100"
-            }`}
-          >
-            <span className="text-base">{myReactionEmoji || "🩷"}</span>
-            <span>{post.myReaction ? REACTIONS.find(r => r.type === post.myReaction)?.label : "React"}</span>
-          </button>
-        </div>
+        <button
+          onClick={() => toggleReaction("heart")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-bold transition active:scale-95 ${
+            post.myReaction === "heart" ? "text-red-500 bg-red-50" : "text-gray-500 hover:bg-gray-100"
+          }`}
+        >
+          <span className={`text-base transition-transform ${post.myReaction === "heart" ? "scale-125" : "scale-100"}`}>❤️</span>
+          <span>{post.myReaction === "heart" ? "Liked" : "Like"}</span>
+        </button>
 
         <button
           onClick={() => setShowComments(v => !v)}

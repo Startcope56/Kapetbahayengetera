@@ -1,0 +1,2 @@
+- [Stories architecture](stories-arch.md) — real backend stories with iTunes music preview; DB tables storiesTable + storyViewsTable in lib/db/src/schema/posts.ts
+- [Auth middleware location](auth-middleware.md) — requireAuth and getUser live in artifacts/api-server/src/lib/auth.ts, NOT routes/auth.ts
