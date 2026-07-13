@@ -315,6 +315,38 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res): Promis
   res.status(201).json(built);
 });
 
+// DELETE /api/conversations/:id/messages/:msgId — delete or unsend a message
+router.delete("/conversations/:id/messages/:msgId", requireAuth, async (req, res): Promise<void> => {
+  const me = getUser(req);
+  const rawConvId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const rawMsgId = Array.isArray(req.params.msgId) ? req.params.msgId[0] : req.params.msgId;
+  const convId = parseInt(rawConvId, 10);
+  const msgId = parseInt(rawMsgId, 10);
+  const forAll = req.query["forAll"] === "true";
+
+  const [msg] = await db.select().from(messagesTable).where(eq(messagesTable.id, msgId)).limit(1);
+  if (!msg) { res.status(404).json({ error: "Message not found" }); return; }
+
+  if (forAll) {
+    // Only sender can unsend for everyone
+    if (msg.senderId !== me.id) { res.status(403).json({ error: "Only the sender can unsend" }); return; }
+    await db.update(messagesTable).set({ content: "⚠️ This message was unsent.", imageUrl: null, voiceUrl: null }).where(eq(messagesTable.id, msgId));
+    const builtMsg = await buildMessage({ ...msg, content: "⚠️ This message was unsent.", imageUrl: null, voiceUrl: null });
+    io.to(`conv:${convId}`).emit("message_updated", builtMsg);
+    res.json({ ok: true, unsent: true });
+  } else {
+    // Delete for self — mark as deleted in seenBy with special flag
+    // We store deleted-for users as negative IDs in seenBy JSON
+    const seenBy: number[] = JSON.parse(msg.seenBy || "[]");
+    const deletedMark = -(me.id);
+    if (!seenBy.includes(deletedMark)) {
+      seenBy.push(deletedMark);
+      await db.update(messagesTable).set({ seenBy: JSON.stringify(seenBy) }).where(eq(messagesTable.id, msgId));
+    }
+    res.json({ ok: true, deleted: true });
+  }
+});
+
 router.post("/conversations/:id/messages/upload", requireAuth, upload.single("file"), async (req, res): Promise<void> => {
   if (!req.file) { res.status(400).json({ error: "No file" }); return; }
   const url = `/api/uploads/${req.file.filename}`;

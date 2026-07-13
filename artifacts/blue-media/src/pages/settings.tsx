@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Lock, Eye, Bell, HelpCircle, BadgeCheck, ChevronRight,
-  LogOut, Palette, Globe, Shield, UserX, Download, Baby, ShieldAlert, Clock, UserCheck
+  LogOut, Palette, Globe, Shield, UserX, Download, Baby, ShieldAlert, Clock, UserCheck,
+  Wifi, Filter, EyeOff, AlignLeft, SortDesc, FileText, AlertTriangle, Share2, Bookmark
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -40,6 +41,16 @@ export default function SettingsPage() {
 
   const [language, setLanguage] = useState(localStorage.getItem("bm_language") || "fil");
   const [fontSize, setFontSize] = useState(localStorage.getItem("bm_fontsize") || "normal");
+
+  // New feature states
+  const [dataSaver, setDataSaver] = useState(localStorage.getItem("bm_data_saver") === "true");
+  const [whisperMode, setWhisperMode] = useState(localStorage.getItem("bm_whisper_mode") === "true");
+  const [chronoFeed, setChronoFeed] = useState(localStorage.getItem("bm_chrono_feed") === "true");
+  const [wordFilter, setWordFilter] = useState(localStorage.getItem("bm_word_filter") || "");
+  const [wordFilterInput, setWordFilterInput] = useState(localStorage.getItem("bm_word_filter") || "");
+  const [cwEnabled, setCwEnabled] = useState(localStorage.getItem("bm_cw_enabled") === "true");
+  const [disableBoosts, setDisableBoosts] = useState(localStorage.getItem("bm_disable_boosts") === "true");
+  const [accentColor, setAccentColor] = useState(localStorage.getItem("bm_accent_color") || "#1877f2");
 
   const handleChangePin = async () => {
     if (newPin !== confirmPin) { toast({ title: "Hindi magkatugma ang PIN", variant: "destructive" }); return; }
@@ -101,6 +112,14 @@ export default function SettingsPage() {
     toast({ title: "✅ Teen Safety settings saved!" });
   };
 
+  const handleSettingsClick = (id: string) => {
+    if (id === "saved-posts-link") {
+      window.location.href = "/saved";
+      return;
+    }
+    setSection(id);
+  };
+
   const menuSections = [
     {
       title: "Account",
@@ -126,8 +145,21 @@ export default function SettingsPage() {
       ]
     },
     {
+      title: "Feed & Content",
+      items: [
+        { id: "data-saver", icon: Wifi, color: "text-green-500", bg: "bg-green-50", title: "Data Saver Mode", subtitle: dataSaver ? "🟢 ON — text lang, walang image autoload" : "Images at videos awtomatikong naglo-load" },
+        { id: "word-filter", icon: Filter, color: "text-red-500", bg: "bg-red-50", title: "Word Filter", subtitle: wordFilter ? `${wordFilter.split(",").filter(Boolean).length} blocked words` : "I-hide ang posts na may masamang salita" },
+        { id: "chrono-feed", icon: SortDesc, color: "text-indigo-500", bg: "bg-indigo-50", title: "Chronological Feed", subtitle: chronoFeed ? "🟢 Latest muna, walang algorithm" : "Default feed ordering" },
+        { id: "whisper-mode", icon: EyeOff, color: "text-purple-500", bg: "bg-purple-50", title: "Whisper Mode", subtitle: whisperMode ? "🟢 Posts mo ay para sa friends mo lang" : "I-post nang private para sa friends lang" },
+        { id: "cw-content", icon: AlertTriangle, color: "text-yellow-500", bg: "bg-yellow-50", title: "Content Warning (CW)", subtitle: cwEnabled ? "🟢 Nagtatanong bago ipakita ang sensitive content" : "I-require ang CW tag sa mga post" },
+        { id: "disable-boosts", icon: Share2, color: "text-gray-500", bg: "bg-gray-50", title: "I-disable ang Boosts/Repost", subtitle: disableBoosts ? "🔒 Hindi ma-re-repost ang mga post mo" : "Pwedeng i-repost ng iba ang posts mo" },
+      ]
+    },
+    {
       title: "More",
       items: [
+        { id: "saved-posts-link", icon: Bookmark, color: "text-yellow-500", bg: "bg-yellow-50", title: "Saved Posts", subtitle: "Tingnan ang lahat ng na-save mong post" },
+        { id: "export-posts", icon: FileText, color: "text-teal-500", bg: "bg-teal-50", title: "Export iyong Posts", subtitle: "I-download ang lahat ng iyong post" },
         { id: "help", icon: HelpCircle, color: "text-purple-500", bg: "bg-purple-50", title: "Help & About", subtitle: "Info at support" },
         { id: "download", icon: Download, color: "text-teal-500", bg: "bg-teal-50", title: "I-download ang Data", subtitle: "Kunin ang iyong data" },
         { id: "deactivate", icon: UserX, color: "text-orange-500", bg: "bg-orange-50", title: "I-deactivate ang Account", subtitle: "Pansamantalang i-disable" },
@@ -160,7 +192,7 @@ export default function SettingsPage() {
               {sec.items.map((item, idx) => (
                 <button
                   key={item.id}
-                  onClick={() => setSection(item.id)}
+                  onClick={() => handleSettingsClick(item.id)}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50 active:bg-gray-100 transition-colors ${idx < sec.items.length - 1 ? "border-b border-gray-100" : ""}`}
                 >
                   <div className={`h-9 w-9 rounded-xl ${item.bg} flex items-center justify-center shrink-0`}>
@@ -605,6 +637,173 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Data Saver Mode ── */}
+      <Dialog open={section === "data-saver"} onOpenChange={o => !o && setSection(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Data Saver Mode 📶</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-green-50 rounded-xl p-3">
+              <p className="text-xs text-green-700">Kapag naka-ON, hindi na awtomatikong maglo-load ang mga larawan at video sa feed. Tipid sa data plan mo!</p>
+            </div>
+            <div className="flex items-center justify-between p-3 border-2 border-gray-200 rounded-xl">
+              <div>
+                <p className="font-semibold text-sm">Data Saver Mode</p>
+                <p className="text-xs text-gray-400">{dataSaver ? "🟢 Aktibo — text lang ang naglo-load" : "🔴 Hindi aktibo"}</p>
+              </div>
+              <Switch checked={dataSaver} onCheckedChange={v => { setDataSaver(v); localStorage.setItem("bm_data_saver", String(v)); toast({ title: v ? "🟢 Data Saver ON! Mas tipid ka na." : "Data Saver OFF" }); }} />
+            </div>
+            {dataSaver && (
+              <div className="bg-yellow-50 rounded-xl p-3 text-xs text-yellow-700">
+                💡 I-tap lang ang larawan/video para i-load ito mano-mano.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Word Filter ── */}
+      <Dialog open={section === "word-filter"} onOpenChange={o => !o && setSection(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Word Filter 🚫</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">Mga post na may mga salitang ito ay awtomatikong itatago sa feed mo.</p>
+            <div>
+              <Label>Blocked Words (comma-separated)</Label>
+              <textarea
+                className="w-full mt-1 border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none outline-none focus:border-red-400 transition h-24"
+                placeholder="scam, away, bastos, loko..."
+                value={wordFilterInput}
+                onChange={e => setWordFilterInput(e.target.value)}
+              />
+              <p className="text-xs text-gray-400 mt-1">Hal: scam, fake, bastos (lagyan ng comma ang bawat isa)</p>
+            </div>
+            {wordFilter && (
+              <div className="bg-red-50 rounded-xl p-3">
+                <p className="text-xs font-semibold text-red-700 mb-1">Kasalukuyang blocked words:</p>
+                <div className="flex flex-wrap gap-1">
+                  {wordFilter.split(",").filter(Boolean).map(w => (
+                    <span key={w} className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold">{w.trim()}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setWordFilterInput(""); setWordFilter(""); localStorage.setItem("bm_word_filter", ""); toast({ title: "Word filter cleared" }); }}>I-clear</Button>
+              <Button className="flex-1" onClick={() => { setWordFilter(wordFilterInput); localStorage.setItem("bm_word_filter", wordFilterInput); setSection(null); toast({ title: "✅ Word filter saved!" }); }}>I-save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Chronological Feed ── */}
+      <Dialog open={section === "chrono-feed"} onOpenChange={o => !o && setSection(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Chronological Feed 📅</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-indigo-50 rounded-xl p-3">
+              <p className="text-xs text-indigo-700">Kapag naka-ON, ang mga post ay ipapakita sa pagkakasunud-sunod ng pinakabago — walang algorithm na nagpipili para sa iyo!</p>
+            </div>
+            <div className="flex items-center justify-between p-3 border-2 border-gray-200 rounded-xl">
+              <div>
+                <p className="font-semibold text-sm">Chronological Feed</p>
+                <p className="text-xs text-gray-400">{chronoFeed ? "🟢 Latest posts muna" : "Default ordering"}</p>
+              </div>
+              <Switch checked={chronoFeed} onCheckedChange={v => { setChronoFeed(v); localStorage.setItem("bm_chrono_feed", String(v)); toast({ title: v ? "🟢 Chronological feed ON!" : "Default feed ordering" }); }} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Whisper Mode ── */}
+      <Dialog open={section === "whisper-mode"} onOpenChange={o => !o && setSection(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Whisper Mode 🤫</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-purple-50 rounded-xl p-3">
+              <p className="text-xs text-purple-700">Kapag naka-ON ang Whisper Mode, ang mga post mo ay ipapakita lang sa iyong mga kaibigan — hindi sa public feed.</p>
+            </div>
+            <div className="flex items-center justify-between p-3 border-2 border-gray-200 rounded-xl">
+              <div>
+                <p className="font-semibold text-sm">Whisper Mode</p>
+                <p className="text-xs text-gray-400">{whisperMode ? "🟢 Posts sa friends lang makikita" : "🔴 Posts sa public feed"}</p>
+              </div>
+              <Switch checked={whisperMode} onCheckedChange={v => { setWhisperMode(v); localStorage.setItem("bm_whisper_mode", String(v)); toast({ title: v ? "🤫 Whisper Mode ON! Friends lang makakakita." : "Whisper Mode OFF" }); }} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Content Warning ── */}
+      <Dialog open={section === "cw-content"} onOpenChange={o => !o && setSection(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Content Warning (CW) ⚠️</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-yellow-50 rounded-xl p-3">
+              <p className="text-xs text-yellow-700">Kapag naka-ON, maaari kang magdagdag ng "Content Warning" tag sa iyong post bago makita ng iba ang nilalaman. Para sa mga sensitibong paksa.</p>
+            </div>
+            <div className="flex items-center justify-between p-3 border-2 border-gray-200 rounded-xl">
+              <div>
+                <p className="font-semibold text-sm">Content Warning Required</p>
+                <p className="text-xs text-gray-400">{cwEnabled ? "🟢 Aktibo" : "🔴 Hindi aktibo"}</p>
+              </div>
+              <Switch checked={cwEnabled} onCheckedChange={v => { setCwEnabled(v); localStorage.setItem("bm_cw_enabled", String(v)); toast({ title: v ? "⚠️ CW mode ON!" : "CW mode OFF" }); }} />
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600">
+              <p className="font-semibold mb-1">Paano gamitin:</p>
+              <p>Sa pag-post, lagyan ng "CW:" sa simula ng iyong post. Hal: "CW: graphic na larawan — mag-ingat!"</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Disable Boosts ── */}
+      <Dialog open={section === "disable-boosts"} onOpenChange={o => !o && setSection(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Disable Boosts/Reposts 🔒</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-xs text-gray-700">Kapag naka-ON, hindi na maaaring i-repost ng iba ang iyong mga post sa kanilang profile o feed.</p>
+            </div>
+            <div className="flex items-center justify-between p-3 border-2 border-gray-200 rounded-xl">
+              <div>
+                <p className="font-semibold text-sm">Disable Reposts</p>
+                <p className="text-xs text-gray-400">{disableBoosts ? "🔒 Hindi ma-re-repost ang posts mo" : "✅ Pwedeng i-repost ng iba"}</p>
+              </div>
+              <Switch checked={disableBoosts} onCheckedChange={v => { setDisableBoosts(v); localStorage.setItem("bm_disable_boosts", String(v)); toast({ title: v ? "🔒 Reposts disabled!" : "Reposts enabled" }); }} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Export Posts ── */}
+      <Dialog open={section === "export-posts"} onOpenChange={o => !o && setSection(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Export iyong Posts 📄</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-teal-50 rounded-xl p-3">
+              <p className="text-xs text-teal-700">I-download ang lahat ng iyong mga post bilang JSON file. Maaari mo itong gamitin bilang backup ng iyong content.</p>
+            </div>
+            <Button className="w-full" onClick={async () => {
+              const t = localStorage.getItem("bluemedia_token");
+              try {
+                const res = await fetch("/api/posts", { headers: { Authorization: `Bearer ${t}` } });
+                const all = await res.json();
+                const mine = all.filter((p: any) => p.author?.id === user?.id);
+                const blob = new Blob([JSON.stringify(mine, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url; a.download = `bluemedia-posts-${Date.now()}.json`; a.click();
+                URL.revokeObjectURL(url);
+                toast({ title: `✅ ${mine.length} posts exported!` });
+                setSection(null);
+              } catch { toast({ title: "Export failed", variant: "destructive" }); }
+            }}>
+              <Download className="h-4 w-4 mr-2" /> I-export ang Posts (JSON)
+            </Button>
+            <p className="text-xs text-gray-400 text-center">Kasama ang lahat ng iyong post, reactions, at comments.</p>
           </div>
         </DialogContent>
       </Dialog>

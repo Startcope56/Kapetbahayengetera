@@ -32,6 +32,44 @@ export default function AdminPage() {
   const [followerRequests, setFollowerRequests] = useState<any[]>([]);
   const [statsInput, setStatsInput] = useState<{ id: number; followers: string; following: string } | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [userNotes, setUserNotes] = useState<Record<number, string>>(() => {
+    try { return JSON.parse(localStorage.getItem("bm_admin_notes") || "{}"); } catch { return {}; }
+  });
+  const [editNoteFor, setEditNoteFor] = useState<number | null>(null);
+  const [noteInput, setNoteInput] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = useState<string>("");
+
+  const saveNote = (userId: number) => {
+    const next = { ...userNotes, [userId]: noteInput };
+    setUserNotes(next);
+    localStorage.setItem("bm_admin_notes", JSON.stringify(next));
+    setEditNoteFor(null);
+    setNoteInput("");
+    toast({ title: "📝 Note saved!" });
+  };
+
+  const toggleSelectUser = (id: number) => {
+    setSelectedUsers(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const executeBulkAction = async () => {
+    if (!bulkAction || selectedUsers.size === 0) return;
+    const ids = Array.from(selectedUsers);
+    for (const id of ids) {
+      if (bulkAction === "ban") await api(`/admin/users/${id}/ban`, { method: "POST", body: JSON.stringify({ banned: true }) });
+      else if (bulkAction === "unban") await api(`/admin/users/${id}/ban`, { method: "POST", body: JSON.stringify({ banned: false }) });
+      else if (bulkAction === "approve") await api(`/admin/users/${id}/approve`, { method: "POST" });
+    }
+    toast({ title: `✅ Bulk ${bulkAction} done on ${ids.length} users` });
+    setSelectedUsers(new Set());
+    setBulkAction("");
+    await load();
+  };
 
   const load = async () => {
     setLoading(true);
@@ -300,9 +338,27 @@ export default function AdminPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input placeholder="Search users..." className="pl-9 rounded-xl" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+
+          {/* Bulk actions toolbar */}
+          {selectedUsers.size > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-blue-700">{selectedUsers.size} selected</span>
+              <select className="text-xs border rounded-lg px-2 py-1.5 outline-none flex-1" value={bulkAction} onChange={e => setBulkAction(e.target.value)}>
+                <option value="">-- Bulk Action --</option>
+                <option value="approve">✅ Approve</option>
+                <option value="ban">🚫 Ban</option>
+                <option value="unban">✅ Unban</option>
+              </select>
+              <button onClick={executeBulkAction} className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition">Apply</button>
+              <button onClick={() => setSelectedUsers(new Set())} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 transition">Clear</button>
+            </div>
+          )}
+
           {filteredUsers.map(u => (
-            <div key={u.id} className="bg-white rounded-2xl p-3 shadow-sm">
+            <div key={u.id} className={`bg-white rounded-2xl p-3 shadow-sm border-2 transition ${selectedUsers.has(u.id) ? "border-blue-400 bg-blue-50/30" : "border-transparent"}`}>
               <div className="flex items-center gap-3">
+                <input type="checkbox" checked={selectedUsers.has(u.id)} onChange={() => toggleSelectUser(u.id)}
+                  className="h-4 w-4 rounded accent-blue-600 shrink-0 cursor-pointer" />
                 <Avatar className="h-10 w-10 shrink-0">
                   <AvatarImage src={u.profilePicture || undefined} />
                   <AvatarFallback className="font-bold text-sm" style={{ background: "#1877f2", color: "white" }}>{u.name?.[0]}</AvatarFallback>
@@ -377,7 +433,32 @@ export default function AdminPage() {
                     <UserX className="h-3 w-3" />Delete
                   </button>
                 )}
+                <button
+                  onClick={() => { setEditNoteFor(editNoteFor === u.id ? null : u.id); setNoteInput(userNotes[u.id] || ""); }}
+                  className="px-2.5 py-1 bg-gray-50 text-gray-600 hover:bg-gray-100 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                  <MessageSquare className="h-3 w-3" />Note
+                </button>
               </div>
+
+              {/* User Notes */}
+              {userNotes[u.id] && editNoteFor !== u.id && (
+                <div className="mt-2 bg-yellow-50 rounded-xl px-3 py-2 text-xs text-yellow-800 border border-yellow-200">
+                  📝 {userNotes[u.id]}
+                </div>
+              )}
+              {editNoteFor === u.id && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-blue-400"
+                    placeholder="Private admin note about this user..."
+                    value={noteInput}
+                    onChange={e => setNoteInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && saveNote(u.id)}
+                  />
+                  <button onClick={() => saveNote(u.id)} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700">Save</button>
+                  <button onClick={() => setEditNoteFor(null)} className="px-2 py-1.5 bg-gray-100 rounded-lg text-xs">✕</button>
+                </div>
+              )}
             </div>
           ))}
         </div>

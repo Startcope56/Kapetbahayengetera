@@ -98,4 +98,25 @@ router.delete("/stories/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({ ok: true });
 });
 
+// POST /api/stories/:id/react — react to a story with heart
+router.post("/stories/:id/react", requireAuth, async (req, res): Promise<void> => {
+  const me = getUser(req);
+  const storyId = parseInt(req.params["id"] as string, 10);
+  const [story] = await db.select().from(storiesTable).where(eq(storiesTable.id, storyId)).limit(1);
+  if (!story) { res.status(404).json({ error: "Story not found" }); return; }
+
+  // Don't notify yourself
+  if (story.userId !== me!.id) {
+    try {
+      const { notificationsTable } = await import("@workspace/db/schema");
+      await db.insert(notificationsTable).values({
+        userId: story.userId,
+        type: "story_react",
+        fromUserId: me!.id,
+      });
+    } catch {}
+  }
+  res.json({ ok: true });
+});
+
 export { router as storiesRouter };

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus, X, ChevronLeft, ChevronRight, Music, Search, Palette, Image as ImageIcon, Play, Pause, Volume2, VolumeX } from "lucide-react";
+import { Plus, X, ChevronLeft, ChevronRight, Music, Search, Palette, Image as ImageIcon, Play, Pause, Volume2, VolumeX, Heart, Send, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Story {
@@ -51,7 +51,6 @@ async function searchItunes(q: string): Promise<ItunesTrack[]> {
   } catch { return []; }
 }
 
-// Group stories by user, keeping latest per user
 function groupStories(stories: Story[]): Map<number, Story[]> {
   const map = new Map<number, Story[]>();
   for (const s of stories) {
@@ -68,8 +67,11 @@ export function StoriesBar() {
   const [viewingGroup, setViewingGroup] = useState<Story[] | null>(null);
   const [viewIdx, setViewIdx] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
+  const [heartAnim, setHeartAnim] = useState(false);
+  const [reactedStories, setReactedStories] = useState<Set<number>>(new Set());
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
 
-  // Create story state
   const [newText, setNewText] = useState("");
   const [selectedColor, setSelectedColor] = useState(STORY_COLORS[0]);
   const [storyImageFile, setStoryImageFile] = useState<File | null>(null);
@@ -81,6 +83,7 @@ export function StoriesBar() {
   const [showMusicSearch, setShowMusicSearch] = useState(false);
   const [posting, setPosting] = useState(false);
   const [storyTab, setStoryTab] = useState<"bg" | "image">("bg");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -113,6 +116,7 @@ export function StoriesBar() {
     if (!story) return;
     fetch(`/api/stories/${story.id}/view`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
     setStories(prev => prev.map(s => s.id === story.id ? { ...s, seen: true } : s));
+    setHeartAnim(false);
   }, [viewingGroup, viewIdx]);
 
   // Music preview on story view
@@ -131,6 +135,63 @@ export function StoriesBar() {
     }
     return () => { audioRef.current?.pause(); };
   }, [viewingGroup, viewIdx]);
+
+  const handleHeartReact = async () => {
+    if (!viewingGroup || !token) return;
+    const story = viewingGroup[viewIdx];
+    if (story.userId === user?.id) return; // Can't react to own story
+    if (reactedStories.has(story.id)) return;
+    setHeartAnim(true);
+    setReactedStories(prev => new Set([...prev, story.id]));
+    try {
+      await fetch(`/api/stories/${story.id}/react`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {}
+    setTimeout(() => setHeartAnim(false), 1000);
+  };
+
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !viewingGroup || !token) return;
+    const story = viewingGroup[viewIdx];
+    if (story.userId === user?.id) return;
+    setSendingReply(true);
+    try {
+      // Find or create a DM conversation then send message
+      const dmRes = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ type: "dm", participantIds: [story.userId] }),
+      });
+      const conv = await dmRes.json();
+      await fetch(`/api/conversations/${conv.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: `💬 Re: story ni ${story.userName}: ${replyText}` }),
+      });
+      setReplyText("");
+      toast({ title: "Mensahe na! 📨", description: `Natanggap ni ${story.userName?.split(" ")[0]}` });
+    } catch {
+      toast({ title: "Hindi napadala", variant: "destructive" });
+    }
+    setSendingReply(false);
+  };
+
+  const handleDeleteStory = async () => {
+    if (!viewingGroup || !token) return;
+    const story = viewingGroup[viewIdx];
+    if (story.userId !== user?.id) return;
+    try {
+      await fetch(`/api/stories/${story.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: "Story ay natanggal ✓" });
+      setViewingGroup(null);
+      setShowDeleteConfirm(false);
+      await load();
+    } catch {
+      toast({ title: "Error deleting story", variant: "destructive" });
+    }
+  };
 
   const searchMusic = async () => {
     if (!musicQuery.trim()) return;
@@ -210,32 +271,23 @@ export function StoriesBar() {
       {/* Stories Bar */}
       <div className="flex gap-2.5 overflow-x-auto px-3 py-3 no-scrollbar">
         {/* Add Story */}
-        <button onClick={() => setShowCreate(true)}
-          className="flex flex-col items-center gap-1.5 shrink-0">
+        <button onClick={() => setShowCreate(true)} className="flex flex-col items-center gap-1.5 shrink-0">
           <div className="relative h-16 w-16 rounded-full overflow-hidden border-3 border-dashed border-blue-300 bg-blue-50 flex items-center justify-center">
-            {user?.profilePicture
-              ? <img src={user.profilePicture} className="w-full h-full object-cover opacity-50" />
-              : null}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Plus className="h-6 w-6 text-blue-500" />
-            </div>
+            {user?.profilePicture ? <img src={user.profilePicture} className="w-full h-full object-cover opacity-50" /> : null}
+            <div className="absolute inset-0 flex items-center justify-center"><Plus className="h-6 w-6 text-blue-500" /></div>
           </div>
-          <span className="text-[10px] text-gray-500 font-medium text-center w-16 truncate">
-            {myStories ? "Iyong Story" : "Magdagdag"}
-          </span>
+          <span className="text-[10px] text-gray-500 font-medium text-center w-16 truncate">{myStories ? "Iyong Story" : "Magdagdag"}</span>
         </button>
 
         {/* My stories ring */}
         {myStories && (
-          <button onClick={() => { setViewingGroup(myStories); setViewIdx(0); }}
-            className="flex flex-col items-center gap-1.5 shrink-0">
+          <button onClick={() => { setViewingGroup(myStories); setViewIdx(0); }} className="flex flex-col items-center gap-1.5 shrink-0">
             <div className={`h-16 w-16 rounded-full overflow-hidden border-3 ${myStories.some(s => !s.seen) ? "border-blue-500" : "border-gray-300"} p-0.5`}>
               {myStories[0].imageUrl
                 ? <img src={myStories[0].imageUrl} className="w-full h-full object-cover rounded-full" />
                 : <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: myStories[0].bgColor || STORY_COLORS[0] }}>
                     <span className="text-white text-xs font-bold text-center px-1 line-clamp-2">{myStories[0].text?.slice(0, 15)}</span>
-                  </div>
-              }
+                  </div>}
             </div>
             <span className="text-[10px] text-blue-600 font-semibold w-16 truncate text-center">Ikaw</span>
           </button>
@@ -245,15 +297,13 @@ export function StoriesBar() {
         {otherGroups.map(g => {
           const first = g.stories[0];
           return (
-            <button key={g.userId} onClick={() => { setViewingGroup(g.stories); setViewIdx(0); }}
-              className="flex flex-col items-center gap-1.5 shrink-0">
+            <button key={g.userId} onClick={() => { setViewingGroup(g.stories); setViewIdx(0); }} className="flex flex-col items-center gap-1.5 shrink-0">
               <div className={`h-16 w-16 rounded-full overflow-hidden border-3 p-0.5 ${g.hasSeen ? "border-gray-300" : "border-blue-500"}`}>
                 {first.imageUrl
                   ? <img src={first.imageUrl} className="w-full h-full object-cover rounded-full" />
                   : <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: first.bgColor || STORY_COLORS[0] }}>
                       <span className="text-white text-[10px] font-bold text-center px-1 line-clamp-2">{first.text?.slice(0, 12)}</span>
-                    </div>
-                }
+                    </div>}
               </div>
               <span className="text-[10px] text-gray-600 font-medium w-16 truncate text-center">{first.userName?.split(" ")[0]}</span>
             </button>
@@ -264,16 +314,16 @@ export function StoriesBar() {
       {/* ── STORY VIEWER ── */}
       {viewingGroup && viewingGroup[viewIdx] && (() => {
         const story = viewingGroup[viewIdx];
+        const isMyStory = story.userId === user?.id;
+        const hasReacted = reactedStories.has(story.id);
         return (
-          <div className="fixed inset-0 z-50 bg-black flex flex-col" onClick={() => setViewingGroup(null)}>
+          <div className="fixed inset-0 z-50 bg-black flex flex-col">
             {/* Progress bars */}
             <div className="flex gap-1 p-3 pt-safe absolute top-0 left-0 right-0 z-10">
               {viewingGroup.map((_, i) => (
                 <div key={i} className="flex-1 h-0.5 bg-white/30 rounded-full overflow-hidden">
-                  {i < viewIdx
-                    ? <div className="h-full bg-white w-full" />
-                    : i === viewIdx
-                    ? <div className="h-full bg-white animate-story-progress" style={{ animation: "story-fill 5s linear forwards" }} />
+                  {i < viewIdx ? <div className="h-full bg-white w-full" />
+                    : i === viewIdx ? <div className="h-full bg-white" style={{ animation: "story-fill 5s linear forwards" }} />
                     : null}
                 </div>
               ))}
@@ -295,6 +345,11 @@ export function StoriesBar() {
                   {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                 </button>
               )}
+              {isMyStory && (
+                <button onClick={() => setShowDeleteConfirm(true)} className="text-red-400 p-1.5 rounded-full bg-black/30">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
               <button onClick={() => setViewingGroup(null)} className="text-white p-1.5 rounded-full bg-black/30"><X className="h-4 w-4" /></button>
             </div>
 
@@ -308,15 +363,21 @@ export function StoriesBar() {
                 </div>
               )}
               {story.imageUrl && story.text && (
-                <div className="absolute bottom-24 left-0 right-0 px-6">
+                <div className="absolute bottom-32 left-0 right-0 px-6">
                   <div className="bg-black/50 rounded-2xl px-4 py-3 text-white text-center font-bold text-base backdrop-blur-sm">{story.text}</div>
+                </div>
+              )}
+              {/* Heart animation */}
+              {heartAnim && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <Heart className="h-28 w-28 text-red-500 fill-red-500 animate-ping opacity-90" />
                 </div>
               )}
             </div>
 
             {/* Music strip */}
             {story.musicTitle && (
-              <div className="absolute bottom-16 left-0 right-0 px-4" onClick={e => e.stopPropagation()}>
+              <div className="absolute bottom-28 left-0 right-0 px-4" onClick={e => e.stopPropagation()}>
                 <div className="bg-black/50 backdrop-blur-sm rounded-2xl px-3 py-2 flex items-center gap-2">
                   {story.musicArtwork && <img src={story.musicArtwork} className="h-8 w-8 rounded-lg object-cover" />}
                   <div className="flex-1 min-w-0">
@@ -330,11 +391,57 @@ export function StoriesBar() {
               </div>
             )}
 
+            {/* Bottom actions */}
+            <div className="absolute bottom-0 left-0 right-0 pb-6 px-4" onClick={e => e.stopPropagation()}>
+              {!isMyStory ? (
+                <div className="flex items-center gap-2">
+                  {/* Reply input */}
+                  <div className="flex-1 flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2.5 border border-white/20">
+                    <input
+                      value={replyText}
+                      onChange={e => setReplyText(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleSendReply()}
+                      placeholder={`Mag-message kay ${story.userName?.split(" ")[0]}...`}
+                      className="flex-1 bg-transparent text-white text-sm placeholder-white/50 outline-none"
+                    />
+                    {replyText && (
+                      <button onClick={handleSendReply} disabled={sendingReply} className="text-blue-400 shrink-0">
+                        {sendingReply ? <div className="h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Send className="h-4 w-4" />}
+                      </button>
+                    )}
+                  </div>
+                  {/* Heart button */}
+                  <button onClick={handleHeartReact}
+                    className={`p-3 rounded-full transition ${hasReacted ? "bg-red-500 text-white" : "bg-white/10 text-white border border-white/20 hover:bg-red-500/20"}`}>
+                    <Heart className={`h-5 w-5 ${hasReacted ? "fill-white" : ""}`} />
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <p className="text-white/50 text-xs">Ito ang iyong story</p>
+                </div>
+              )}
+            </div>
+
             {/* Prev / Next taps */}
-            <div className="absolute inset-0 flex" onClick={e => e.stopPropagation()}>
+            <div className="absolute inset-0 flex" style={{ zIndex: -1 }}>
               <div className="flex-1" onClick={() => { if (viewIdx > 0) setViewIdx(i => i - 1); }} />
               <div className="flex-1" onClick={() => { if (viewIdx < viewingGroup.length - 1) setViewIdx(i => i + 1); else setViewingGroup(null); }} />
             </div>
+
+            {/* Delete confirm */}
+            {showDeleteConfirm && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70">
+                <div className="bg-white rounded-2xl p-5 mx-6 text-center shadow-xl">
+                  <p className="font-black text-gray-800 text-base mb-1">Tanggalin ang story?</p>
+                  <p className="text-sm text-gray-500 mb-4">Hindi na ito maibabalik.</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold text-sm">Huwag</button>
+                    <button onClick={handleDeleteStory} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-bold text-sm">Tanggalin</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -343,21 +450,14 @@ export function StoriesBar() {
       {showCreate && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end justify-center" onClick={() => setShowCreate(false)}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <h3 className="font-black text-gray-900 text-base">Gumawa ng Story 🌟</h3>
-              <button onClick={() => setShowCreate(false)} className="p-2 rounded-full hover:bg-gray-100">
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
+              <button onClick={() => setShowCreate(false)} className="p-2 rounded-full hover:bg-gray-100"><X className="h-5 w-5 text-gray-500" /></button>
             </div>
-
             <div className="p-4 space-y-4">
-              {/* Preview */}
               <div className="rounded-2xl overflow-hidden aspect-[9/14] max-h-64 flex items-center justify-center relative"
                 style={{ background: storyTab === "bg" ? selectedColor : "#111" }}>
-                {storyTab === "image" && storyImagePreview
-                  ? <img src={storyImagePreview} className="w-full h-full object-cover absolute inset-0" />
-                  : null}
+                {storyTab === "image" && storyImagePreview ? <img src={storyImagePreview} className="w-full h-full object-cover absolute inset-0" /> : null}
                 {newText && (
                   <div className="absolute inset-0 flex items-center justify-center px-4">
                     <p className="text-white font-black text-xl text-center drop-shadow-lg leading-snug">{newText}</p>
@@ -371,20 +471,16 @@ export function StoriesBar() {
                 )}
               </div>
 
-              {/* Tabs */}
               <div className="flex gap-2">
-                <button onClick={() => setStoryTab("bg")}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${storyTab === "bg" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600"}`}>
+                <button onClick={() => setStoryTab("bg")} className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${storyTab === "bg" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600"}`}>
                   <Palette className="h-3.5 w-3.5" /> Kulay
                 </button>
-                <button onClick={() => fileRef.current?.click()}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${storyTab === "image" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600"}`}>
+                <button onClick={() => fileRef.current?.click()} className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${storyTab === "image" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600"}`}>
                   <ImageIcon className="h-3.5 w-3.5" /> Larawan
                 </button>
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
               </div>
 
-              {/* Color picker */}
               {storyTab === "bg" && (
                 <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                   {STORY_COLORS.map(c => (
@@ -395,15 +491,9 @@ export function StoriesBar() {
                 </div>
               )}
 
-              {/* Text input */}
-              <textarea
-                value={newText} onChange={e => setNewText(e.target.value)}
-                placeholder="Isulat ang iyong kuwento... 📝"
-                rows={2}
-                className="w-full border-2 border-gray-200 rounded-2xl px-3 py-2.5 text-sm resize-none outline-none focus:border-blue-400 transition"
-              />
+              <textarea value={newText} onChange={e => setNewText(e.target.value)} placeholder="Isulat ang iyong kuwento... 📝" rows={2}
+                className="w-full border-2 border-gray-200 rounded-2xl px-3 py-2.5 text-sm resize-none outline-none focus:border-blue-400 transition" />
 
-              {/* Music */}
               <div>
                 <button onClick={() => setShowMusicSearch(!showMusicSearch)}
                   className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700">
@@ -411,33 +501,26 @@ export function StoriesBar() {
                   {selectedMusic ? `🎵 ${selectedMusic.trackName} — ${selectedMusic.artistName}` : "Magdagdag ng musika 🎵"}
                   {selectedMusic && <button onClick={e => { e.stopPropagation(); setSelectedMusic(null); stopPreview(); }} className="text-red-400 hover:text-red-500 ml-1"><X className="h-3.5 w-3.5" /></button>}
                 </button>
-
                 {showMusicSearch && (
                   <div className="mt-2 space-y-2">
                     <div className="flex gap-2">
-                      <input value={musicQuery} onChange={e => setMusicQuery(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && searchMusic()}
-                        placeholder="Hanapin ang kanta... (hal. OPM, love song)"
-                        className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400" />
-                      <button onClick={searchMusic} disabled={musicSearching}
-                        className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold disabled:opacity-50">
+                      <input value={musicQuery} onChange={e => setMusicQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && searchMusic()}
+                        placeholder="Hanapin ang kanta..." className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-400" />
+                      <button onClick={searchMusic} disabled={musicSearching} className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold disabled:opacity-50">
                         {musicSearching ? "..." : <Search className="h-4 w-4" />}
                       </button>
                     </div>
-
                     {musicResults.length > 0 && (
                       <div className="space-y-1 max-h-48 overflow-y-auto">
                         {musicResults.map(t => (
-                          <div key={t.trackId}
-                            className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer transition ${selectedMusic?.trackId === t.trackId ? "bg-blue-50 border-2 border-blue-300" : "hover:bg-gray-50 border-2 border-transparent"}`}
+                          <div key={t.trackId} className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer transition ${selectedMusic?.trackId === t.trackId ? "bg-blue-50 border-2 border-blue-300" : "hover:bg-gray-50 border-2 border-transparent"}`}
                             onClick={() => { setSelectedMusic(t); setShowMusicSearch(false); previewTrack(t); }}>
                             <img src={t.artworkUrl100} className="h-9 w-9 rounded-lg object-cover shrink-0" />
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-bold text-gray-900 truncate">{t.trackName}</p>
                               <p className="text-[10px] text-gray-500 truncate">{t.artistName}</p>
                             </div>
-                            <button onClick={e => { e.stopPropagation(); previewTrack(t); }}
-                              className="p-1.5 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 shrink-0">
+                            <button onClick={e => { e.stopPropagation(); previewTrack(t); }} className="p-1.5 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 shrink-0">
                               <Play className="h-3 w-3" />
                             </button>
                           </div>

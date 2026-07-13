@@ -29,6 +29,7 @@ import MoodPage from "@/pages/mood";
 import HighlightsPage from "@/pages/highlights";
 import YoutubePage from "@/pages/youtube";
 import RequestFollowersPage from "@/pages/request-followers";
+import SavedPostsPage from "@/pages/saved-posts";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -63,6 +64,7 @@ function Router() {
       <Route path="/highlights"><Layout><ProtectedRoute component={HighlightsPage} /></Layout></Route>
       <Route path="/videos"><Layout><ProtectedRoute component={YoutubePage} /></Layout></Route>
       <Route path="/request-followers"><Layout><ProtectedRoute component={RequestFollowersPage} /></Layout></Route>
+      <Route path="/saved"><Layout><ProtectedRoute component={SavedPostsPage} /></Layout></Route>
       <Route path="/profile/:id"><Layout><ProtectedRoute component={ProfilePage} /></Layout></Route>
       <Route path="/friends"><Layout><ProtectedRoute component={FriendsPage} /></Layout></Route>
       <Route path="/chat"><Layout><ProtectedRoute component={ChatListPage} /></Layout></Route>

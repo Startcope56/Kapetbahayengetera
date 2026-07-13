@@ -555,10 +555,23 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
 
 type ComposerTab = "feeling" | "activity" | "location" | null;
 
+function getGreeting(name: string): string {
+  const h = new Date().getHours();
+  const firstName = name?.split(" ")[0] || "Ka";
+  if (h >= 5 && h < 12) return `Magandang umaga, ${firstName}! ☀️`;
+  if (h >= 12 && h < 18) return `Magandang hapon, ${firstName}! 🌤️`;
+  if (h >= 18 && h < 21) return `Magandang gabi, ${firstName}! 🌆`;
+  return `Kumusta ka, ${firstName}? 🌙`;
+}
+
 export default function FeedPage() {
   const { user, token } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showGreeting, setShowGreeting] = useState(() => {
+    const key = `bm_greeting_${new Date().toDateString()}`;
+    return localStorage.getItem(key) !== "seen";
+  });
 
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
@@ -670,6 +683,24 @@ export default function FeedPage() {
 
   return (
     <div className="space-y-3">
+
+      {/* Time-based greeting banner */}
+      {showGreeting && user && (
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-4 text-white flex items-center gap-3 shadow-sm">
+          <div className="text-3xl">💙</div>
+          <div className="flex-1">
+            <p className="font-bold text-base leading-tight">{getGreeting(user.name || "Ka")}</p>
+            <p className="text-white/80 text-xs mt-0.5">Ano ang nasa isip mo ngayon?</p>
+          </div>
+          <button
+            onClick={() => {
+              localStorage.setItem(`bm_greeting_${new Date().toDateString()}`, "seen");
+              setShowGreeting(false);
+            }}
+            className="text-white/70 hover:text-white p-1 rounded-full hover:bg-white/20 transition text-lg leading-none"
+          >×</button>
+        </div>
+      )}
 
       {/* Stories */}
       <StoriesBar />

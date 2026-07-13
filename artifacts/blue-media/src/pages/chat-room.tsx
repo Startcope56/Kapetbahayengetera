@@ -730,13 +730,39 @@ export default function ChatRoomPage() {
                         )}
                       </div>
                     </PopoverTrigger>
-                    <PopoverContent side="top" align={isMine ? "end" : "start"} className="w-auto p-2 rounded-full flex gap-1">
-                      {EMOJIS.map(e => (
-                        <button key={e} onClick={() => handleReact(msg.id, e)} className="text-lg hover:scale-125 transition-transform p-0.5">{e}</button>
-                      ))}
-                      <button onClick={() => setReplyTo(msg)} className="text-xs px-2 py-1 bg-gray-100 rounded-full hover:bg-gray-200 transition ml-1 text-gray-600">
-                        Reply
-                      </button>
+                    <PopoverContent side="top" align={isMine ? "end" : "start"} className="w-auto p-2 flex flex-col gap-1">
+                      <div className="flex gap-1">
+                        {EMOJIS.map(e => (
+                          <button key={e} onClick={() => handleReact(msg.id, e)} className="text-lg hover:scale-125 transition-transform p-0.5">{e}</button>
+                        ))}
+                        <button onClick={() => setReplyTo(msg)} className="text-xs px-2 py-1 bg-gray-100 rounded-full hover:bg-gray-200 transition ml-1 text-gray-600">
+                          Reply
+                        </button>
+                      </div>
+                      <div className="flex gap-1 border-t border-gray-100 pt-1">
+                        <button
+                          onClick={async () => {
+                            const res = await fetch(`/api/conversations/${convId}/messages/${msg.id}?forAll=false`, {
+                              method: "DELETE", headers: { Authorization: `Bearer ${token!}` }
+                            });
+                            if (res.ok) queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(convId) });
+                          }}
+                          className="text-xs px-2 py-1 bg-gray-100 rounded-full hover:bg-gray-200 transition text-gray-600">
+                          🗑️ Delete for me
+                        </button>
+                        {isMine && (
+                          <button
+                            onClick={async () => {
+                              const res = await fetch(`/api/conversations/${convId}/messages/${msg.id}?forAll=true`, {
+                                method: "DELETE", headers: { Authorization: `Bearer ${token!}` }
+                              });
+                              if (res.ok) queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(convId) });
+                            }}
+                            className="text-xs px-2 py-1 bg-red-100 rounded-full hover:bg-red-200 transition text-red-600">
+                            ↩️ Unsend
+                          </button>
+                        )}
+                      </div>
                     </PopoverContent>
                   </Popover>
                 </div>
