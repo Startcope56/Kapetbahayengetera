@@ -4,12 +4,13 @@ import { useAuth } from "@/context/AuthContext";
 import {
   useGetConversation, useListMessages, useSendMessage,
   useMarkConversationRead, useReactToMessage,
+  useUpdateConversation,
   getListMessagesQueryKey, getGetConversationQueryKey, getGetUnreadCountQueryKey,
 } from "@workspace/api-client-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Image as ImageIcon, Send, Users, Phone, Video, Mic, MicOff, VideoOff, PhoneOff, X, UserPlus, Search, Bot, BotOff } from "lucide-react";
+import { ArrowLeft, Image as ImageIcon, Send, Users, Phone, Video, Mic, MicOff, VideoOff, PhoneOff, X, UserPlus, Search, Bot, BotOff, Palette, Smile } from "lucide-react";
 import { getSocket } from "@/lib/socket";
 import { useQueryClient } from "@tanstack/react-query";
 import { uploadFile } from "@/lib/upload";
@@ -18,6 +19,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 
 const EMOJIS = ["🩷", "⭐", "💔", "💤", "😆", "🔥", "👍", "😮"];
+const CHAT_THEMES = [
+  { name: "Sky", value: "#eff6ff", swatch: "#60a5fa" },
+  { name: "Lavender", value: "#f5f3ff", swatch: "#a78bfa" },
+  { name: "Mint", value: "#ecfdf5", swatch: "#34d399" },
+  { name: "Rose", value: "#fff1f2", swatch: "#fb7185" },
+  { name: "Warm", value: "#fffbeb", swatch: "#fbbf24" },
+  { name: "Night", value: "#111827", swatch: "#374151" },
+];
 
 type CallState = "idle" | "calling" | "ringing" | "active" | "ended";
 
@@ -326,6 +335,9 @@ export default function ChatRoomPage() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
   const [togglingAI, setTogglingAI] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const updateConversation = useUpdateConversation();
 
   const [callType, setCallType] = useState<"voice" | "video">("voice");
   const [callState, setCallState] = useState<CallState>("idle");
@@ -384,6 +396,17 @@ export default function ChatRoomPage() {
       }
     } catch { toast({ title: "Failed to toggle AI", variant: "destructive" }); }
     setTogglingAI(false);
+  };
+
+  const saveTheme = async (backgroundTheme: string) => {
+    try {
+      await updateConversation.mutateAsync({ id: convId, data: { backgroundTheme } });
+      queryClient.invalidateQueries({ queryKey: getGetConversationQueryKey(convId) });
+      setShowThemePicker(false);
+      toast({ title: "Chat theme updated" });
+    } catch {
+      toast({ title: "Hindi ma-update ang chat theme", variant: "destructive" });
+    }
   };
 
   useEffect(() => {
@@ -620,6 +643,24 @@ export default function ChatRoomPage() {
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            <div className="relative">
+              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-purple-600 hover:bg-purple-50"
+                onClick={() => setShowThemePicker(v => !v)} title="Chat theme">
+                <Palette className="h-4 w-4" />
+              </Button>
+              {showThemePicker && (
+                <div className="absolute right-0 top-11 z-30 w-44 rounded-xl bg-white p-2 shadow-xl border border-gray-100">
+                  <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">Chat theme</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {CHAT_THEMES.map(theme => (
+                      <button key={theme.name} title={theme.name} onClick={() => saveTheme(theme.value)}
+                        className="h-8 w-8 rounded-full border-2 border-white shadow ring-1 ring-gray-200 hover:scale-110 transition"
+                        style={{ background: theme.swatch }} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             {isGroup && (
               <>
                 {/* AI toggle */}
@@ -825,6 +866,20 @@ export default function ChatRoomPage() {
                 onChange={e => setMessage(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e); } }}
               />
+              <div className="relative">
+                <button type="button" onClick={() => setShowEmojiPicker(v => !v)}
+                  className="text-gray-400 hover:text-yellow-500 transition" title="Add emoji">
+                  <Smile className="h-4 w-4" />
+                </button>
+                {showEmojiPicker && (
+                  <div className="absolute bottom-10 right-0 z-30 flex gap-1 rounded-xl border border-gray-100 bg-white p-2 shadow-xl">
+                    {EMOJIS.map(emoji => (
+                      <button type="button" key={emoji} onClick={() => { setMessage(m => m + emoji); setShowEmojiPicker(false); }}
+                        className="p-1 text-lg hover:scale-125 transition">{emoji}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <Button type="submit" size="icon" className="rounded-full shrink-0 h-9 w-9"
               style={{ background: "linear-gradient(135deg,#1877f2,#0a6bc7)" }}

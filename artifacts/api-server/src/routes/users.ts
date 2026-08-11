@@ -66,7 +66,7 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
   if (bio !== undefined) update.bio = bio;
   if (location !== undefined) update.location = location;
   if (website !== undefined) update.website = website;
-  if (privacy != null) update.privacy = privacy;
+  if (privacy != null && ["public", "friends_of_friends", "private"].includes(privacy)) update.privacy = privacy;
   const [user] = await db.update(usersTable).set(update).where(eq(usersTable.id, id)).returning();
   res.json(formatUser(user));
 });

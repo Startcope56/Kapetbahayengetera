@@ -19,6 +19,8 @@ export default function LivePage() {
   const { user, token } = useAuth();
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const viewerStreamId = new URLSearchParams(window.location.search).get("streamId");
+  const isViewer = Boolean(viewerStreamId);
   const [isLive, setIsLive] = useState(false);
   const [title, setTitle] = useState("");
   const [viewerCount, setViewerCount] = useState(0);
@@ -26,13 +28,21 @@ export default function LivePage() {
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [commentText, setCommentText] = useState("");
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [liveStreamId, setLiveStreamId] = useState<string | null>(null);
+  const peerConnections = useRef(new Map<string, RTCPeerConnection>());
   const [floatingHearts, setFloatingHearts] = useState<{ id: string; x: number }[]>([]);
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [comments]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = isViewer ? remoteStream : stream;
+    }
+  }, [isViewer, remoteStream, stream]);
 
   useEffect(() => {
     if (!token) return;
@@ -45,12 +55,65 @@ export default function LivePage() {
     socket.on("live_comment", (c: LiveComment) => {
       setComments(prev => [...prev.slice(-99), c]);
     });
+
+    const createOfferForViewer = async ({ viewerSocketId }: { viewerSocketId: string }) => {
+      if (!stream || !liveStreamId) return;
+      const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      peerConnections.current.set(viewerSocketId, peer);
+      stream.getTracks().forEach(track => peer.addTrack(track, stream));
+      peer.onicecandidate = event => {
+        if (event.candidate) socket.emit("live_ice", { to: viewerSocketId, candidate: event.candidate });
+      };
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      socket.emit("live_offer", { to: viewerSocketId, offer });
+    };
+
+    const handleOffer = async ({ from, offer }: { from: string; offer: RTCSessionDescriptionInit }) => {
+      if (!isViewer) return;
+      const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      peerConnections.current.set(from, peer);
+      peer.ontrack = event => setRemoteStream(event.streams[0] || null);
+      peer.onicecandidate = event => {
+        if (event.candidate) socket.emit("live_ice", { to: from, candidate: event.candidate });
+      };
+      await peer.setRemoteDescription(offer);
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      socket.emit("live_answer", { to: from, answer });
+    };
+
+    const handleAnswer = async ({ from, answer }: { from: string; answer: RTCSessionDescriptionInit }) => {
+      await peerConnections.current.get(from)?.setRemoteDescription(answer);
+    };
+
+    const handleIce = async ({ from, candidate }: { from: string; candidate: RTCIceCandidateInit }) => {
+      await peerConnections.current.get(from)?.addIceCandidate(candidate);
+    };
+
+    socket.on("live_viewer_joined", createOfferForViewer);
+    socket.on("live_offer", handleOffer);
+    socket.on("live_answer", handleAnswer);
+    socket.on("live_ice", handleIce);
+
+    if (isViewer && viewerStreamId) {
+      setLiveStreamId(viewerStreamId);
+      setIsLive(true);
+      socket.emit("live_join", { streamId: viewerStreamId });
+    }
+
     return () => {
       socket.off("live_viewer_count");
       socket.off("live_heart");
       socket.off("live_comment");
+      socket.off("live_viewer_joined", createOfferForViewer);
+      socket.off("live_offer", handleOffer);
+      socket.off("live_answer", handleAnswer);
+      socket.off("live_ice", handleIce);
+      peerConnections.current.forEach(peer => peer.close());
+      peerConnections.current.clear();
     };
-  }, [token]);
+  }, [token, isViewer, viewerStreamId, liveStreamId, stream]);
 
   const addFloatingHeart = () => {
     const id = Math.random().toString(36).slice(2);
@@ -64,7 +127,6 @@ export default function LivePage() {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setStream(mediaStream);
-      if (videoRef.current) videoRef.current.srcObject = mediaStream;
       const sid = `live_${user?.id}_${Date.now()}`;
       setLiveStreamId(sid);
       setIsLive(true);
@@ -79,9 +141,13 @@ export default function LivePage() {
 
   const endLive = () => {
     stream?.getTracks().forEach(t => t.stop());
+    if (isViewer && liveStreamId) {
+      getSocket(token!).emit("live_leave", { streamId: liveStreamId });
+    }
     setStream(null);
+    setRemoteStream(null);
     setIsLive(false);
-    if (liveStreamId) {
+    if (liveStreamId && !isViewer) {
       const socket = getSocket(token!);
       socket.emit("live_end", { streamId: liveStreamId });
     }
@@ -195,8 +261,8 @@ export default function LivePage() {
               <Heart className="h-3 w-3 text-red-400" />{heartCount}
             </div>
           </div>
-          <button onClick={endLive} className="bg-red-500 text-white rounded-full px-3 py-1.5 text-xs font-bold flex items-center gap-1 hover:bg-red-600 transition">
-            <X className="h-3.5 w-3.5" /> End Live
+           <button onClick={endLive} className="bg-red-500 text-white rounded-full px-3 py-1.5 text-xs font-bold flex items-center gap-1 hover:bg-red-600 transition">
+             <X className="h-3.5 w-3.5" /> {isViewer ? "Leave Live" : "End Live"}
           </button>
         </div>
 

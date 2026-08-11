@@ -5,6 +5,7 @@
  * Blue Media social platform API
  * OpenAPI spec version: 0.1.0
  */
+import type { PostInputVisibility } from './postInputVisibility';
 
 export interface PostInput {
   content: string;
@@ -12,4 +13,15 @@ export interface PostInput {
   imageUrl?: string | null;
   /** @nullable */
   bgColor?: string | null;
+  /** @nullable */
+  videoUrl?: string | null;
+  /** @nullable */
+  liveStreamId?: string | null;
+  /** @nullable */
+  feeling?: string | null;
+  /** @nullable */
+  activity?: string | null;
+  /** @nullable */
+  locationTag?: string | null;
+  visibility?: PostInputVisibility;
 }

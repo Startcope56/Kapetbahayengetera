@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PostReaction } from './postReaction';
+import type { PostVisibility } from './postVisibility';
 import type { User } from './user';
 
 export interface Post {
@@ -16,6 +17,11 @@ export interface Post {
   imageUrl?: string | null;
   /** @nullable */
   bgColor?: string | null;
+  /** @nullable */
+  videoUrl?: string | null;
+  /** @nullable */
+  liveStreamId?: string | null;
+  visibility?: PostVisibility;
   author?: User;
   reactions?: PostReaction[];
   commentCount?: number;

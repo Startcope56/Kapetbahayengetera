@@ -11,5 +11,6 @@ export type UserPrivacy = typeof UserPrivacy[keyof typeof UserPrivacy];
 
 export const UserPrivacy = {
   public: 'public',
-  friends: 'friends',
+  friends_of_friends: 'friends_of_friends',
+  private: 'private',
 } as const;

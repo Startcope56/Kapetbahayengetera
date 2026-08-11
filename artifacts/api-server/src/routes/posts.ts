@@ -2,8 +2,8 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { db, usersTable, postsTable, postReactionsTable, postCommentsTable, notificationsTable } from "@workspace/db";
-import { eq, desc, and, count } from "drizzle-orm";
+import { db, usersTable, postsTable, postReactionsTable, postCommentsTable, notificationsTable, friendshipsTable } from "@workspace/db";
+import { eq, desc, and, count, or, inArray, sql } from "drizzle-orm";
 import { requireAuth, getUser, formatUser } from "../lib/auth";
 import { uploadsDir } from "../app";
 import { io } from "../index";
@@ -61,12 +61,14 @@ async function buildPost(post: typeof postsTable.$inferSelect, meId: number) {
     content: post.content,
     imageUrl: post.imageUrl,
     videoUrl: post.videoUrl,
+    liveStreamId: (post as any).liveStreamId ?? null,
     fileUrl: post.fileUrl,
     fileName: post.fileName,
     bgColor: post.bgColor ?? null,
     feeling: post.feeling ?? null,
     activity: post.activity ?? null,
     locationTag: (post as any).location ?? null,
+    visibility: (post as any).visibility ?? "public",
     taggedUserIds: post.taggedUserIds ? JSON.parse(post.taggedUserIds) : [],
     author: author ? formatUser(author) : null,
     reactions,
@@ -79,9 +81,34 @@ async function buildPost(post: typeof postsTable.$inferSelect, meId: number) {
 router.get("/posts", requireAuth, async (req, res): Promise<void> => {
   const me = getUser(req);
   const userId = req.query.userId ? parseInt(req.query.userId as string, 10) : null;
-  const posts = userId
-    ? await db.select().from(postsTable).where(eq(postsTable.userId, userId)).orderBy(desc(postsTable.createdAt)).limit(50)
-    : await db.select().from(postsTable).orderBy(desc(postsTable.createdAt)).limit(50);
+  const accepted = await db.select({
+    requesterId: friendshipsTable.requesterId,
+    addresseeId: friendshipsTable.addresseeId,
+  }).from(friendshipsTable).where(and(
+    eq(friendshipsTable.status, "accepted"),
+    or(eq(friendshipsTable.requesterId, me.id), eq(friendshipsTable.addresseeId, me.id)),
+  ));
+  const friendIds = accepted.map(f => f.requesterId === me.id ? f.addresseeId : f.requesterId);
+  const friendsOfFriends = friendIds.length
+    ? await db.select({ requesterId: friendshipsTable.requesterId, addresseeId: friendshipsTable.addresseeId })
+      .from(friendshipsTable)
+      .where(and(
+        eq(friendshipsTable.status, "accepted"),
+        or(inArray(friendshipsTable.requesterId, friendIds), inArray(friendshipsTable.addresseeId, friendIds)),
+      ))
+    : [];
+  const fofIds = Array.from(new Set(friendsOfFriends.flatMap(f => [f.requesterId, f.addresseeId])))
+    .filter(id => id !== me.id && !friendIds.includes(id));
+  const visibilityFilter = or(
+    eq(postsTable.visibility, "public"),
+    eq(postsTable.userId, me.id),
+    friendIds.length ? and(eq(postsTable.visibility, "friends"), inArray(postsTable.userId, friendIds)) : sql`false`,
+    friendIds.length || fofIds.length
+      ? and(eq(postsTable.visibility, "friends_of_friends"), inArray(postsTable.userId, [...friendIds, ...fofIds]))
+      : sql`false`,
+  );
+  const ownerFilter = userId ? eq(postsTable.userId, userId) : visibilityFilter;
+  const posts = await db.select().from(postsTable).where(ownerFilter).orderBy(desc(postsTable.createdAt)).limit(50);
   const result = await Promise.all(posts.map(p => buildPost(p, me.id)));
   res.json(result);
 });
@@ -97,7 +124,10 @@ router.get("/posts/:id", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/posts", requireAuth, async (req, res): Promise<void> => {
   const me = getUser(req);
-  const { content, imageUrl, videoUrl, fileUrl, fileName, bgColor, feeling, activity, locationTag, taggedUserIds } = req.body;
+  const { content, imageUrl, videoUrl, liveStreamId, fileUrl, fileName, bgColor, feeling, activity, locationTag, taggedUserIds } = req.body;
+  const requestedVisibility = ["public", "friends_of_friends", "private"].includes(req.body.visibility)
+    ? req.body.visibility
+    : ((me as any).privacy === "friends" ? "friends_of_friends" : ((me as any).privacy ?? "public"));
   if (!content && !imageUrl && !videoUrl && !fileUrl) { res.status(400).json({ error: "content, imageUrl, videoUrl, or fileUrl required" }); return; }
 
   if (content && containsProfanity(content)) {
@@ -113,6 +143,7 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     content: content ?? "",
     imageUrl: imageUrl ?? null,
     videoUrl: videoUrl ?? null,
+    liveStreamId: liveStreamId ?? null,
     fileUrl: fileUrl ?? null,
     fileName: fileName ?? null,
     bgColor: bgColor ?? null,
@@ -120,6 +151,7 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     activity: activity ?? null,
     location: locationTag ?? null,
     taggedUserIds: taggedUserIds ? JSON.stringify(taggedUserIds) : null,
+    visibility: requestedVisibility,
   } as any).returning();
   const built = await buildPost(post, me.id);
   io.emit("new_post", built);

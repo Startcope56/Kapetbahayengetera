@@ -27,7 +27,9 @@ export default function SettingsPage() {
   const [confirmPin, setConfirmPin] = useState("");
   const changePin = useChangePassword();
 
-  const [privacy, setPrivacy] = useState<"public" | "friends">((user?.privacy as "public" | "friends") || "public");
+  const [privacy, setPrivacy] = useState<"public" | "friends_of_friends" | "private">(
+    ((user?.privacy as "public" | "friends_of_friends" | "private") || "public")
+  );
   const updateUser = useUpdateUser();
   const claimBadge = useClaimBlueBadge();
 
@@ -125,7 +127,7 @@ export default function SettingsPage() {
       title: "Account",
       items: [
         { id: "pin", icon: Lock, color: "text-blue-500", bg: "bg-blue-50", title: "Palitan ang PIN", subtitle: "I-update ang iyong 4-digit na PIN" },
-        { id: "privacy", icon: Eye, color: "text-green-500", bg: "bg-green-50", title: "Privacy", subtitle: user?.privacy === "friends" ? "Mga kaibigan lang" : "Publiko" },
+        { id: "privacy", icon: Eye, color: "text-green-500", bg: "bg-green-50", title: "Privacy", subtitle: user?.privacy === "private" ? "Ikaw lang" : user?.privacy === "friends_of_friends" ? "Friends of friends" : "Publiko" },
         { id: "badge", icon: BadgeCheck, color: "text-indigo-500", bg: "bg-indigo-50", title: "Blue Badge", subtitle: user?.blueBadge ? "✓ Verified ka na!" : "I-claim ang iyong badge" },
       ]
     },
@@ -243,14 +245,18 @@ export default function SettingsPage() {
           <DialogHeader><DialogTitle>Privacy Settings 👁️</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-gray-500">Sino ang makakakita ng iyong mga post at profile?</p>
-            {["public", "friends"].map(p => (
-              <button key={p} onClick={() => setPrivacy(p as "public" | "friends")}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition ${privacy === p ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"}`}>
+            {[
+              { value: "public", title: "🌍 Publiko", description: "Lahat ay makakakita" },
+              { value: "friends_of_friends", title: "👥 Friends of Friends", description: "Mga kaibigan at mga kaibigan nila" },
+              { value: "private", title: "🔒 Private", description: "Ikaw lang ang makakakita" },
+            ].map(p => (
+              <button key={p.value} onClick={() => setPrivacy(p.value as typeof privacy)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition ${privacy === p.value ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"}`}>
                 <div className="text-left">
-                  <p className="font-semibold text-sm">{p === "public" ? "🌍 Publiko" : "👫 Mga Kaibigan Lang"}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{p === "public" ? "Lahat ay makakakita" : "Mga kaibigan mo lang"}</p>
+                  <p className="font-semibold text-sm">{p.title}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{p.description}</p>
                 </div>
-                {privacy === p && <div className="h-4 w-4 rounded-full bg-blue-500" />}
+                {privacy === p.value && <div className="h-4 w-4 rounded-full bg-blue-500" />}
               </button>
             ))}
             <Button onClick={handlePrivacySave} className="w-full" disabled={updateUser.isPending}>I-save</Button>

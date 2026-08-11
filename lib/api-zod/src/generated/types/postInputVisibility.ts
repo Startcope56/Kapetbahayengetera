@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UserUpdatePrivacy = typeof UserUpdatePrivacy[keyof typeof UserUpdatePrivacy];
+export type PostInputVisibility = typeof PostInputVisibility[keyof typeof PostInputVisibility];
 
 
-export const UserUpdatePrivacy = {
+export const PostInputVisibility = {
   public: 'public',
   friends_of_friends: 'friends_of_friends',
   private: 'private',

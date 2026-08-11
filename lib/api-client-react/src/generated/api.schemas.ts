@@ -44,7 +44,8 @@ export type UserPrivacy = typeof UserPrivacy[keyof typeof UserPrivacy];
 
 export const UserPrivacy = {
   public: 'public',
-  friends: 'friends',
+  friends_of_friends: 'friends_of_friends',
+  private: 'private',
 } as const;
 
 export interface User {
@@ -82,7 +83,8 @@ export type UserUpdatePrivacy = typeof UserUpdatePrivacy[keyof typeof UserUpdate
 
 export const UserUpdatePrivacy = {
   public: 'public',
-  friends: 'friends',
+  friends_of_friends: 'friends_of_friends',
+  private: 'private',
 } as const;
 
 export interface UserUpdate {
@@ -160,6 +162,15 @@ export interface FriendshipStatus {
   requestId?: number | null;
 }
 
+export type PostVisibility = typeof PostVisibility[keyof typeof PostVisibility];
+
+
+export const PostVisibility = {
+  public: 'public',
+  friends_of_friends: 'friends_of_friends',
+  private: 'private',
+} as const;
+
 export interface PostReaction {
   type: string;
   count: number;
@@ -173,6 +184,11 @@ export interface Post {
   imageUrl?: string | null;
   /** @nullable */
   bgColor?: string | null;
+  /** @nullable */
+  videoUrl?: string | null;
+  /** @nullable */
+  liveStreamId?: string | null;
+  visibility?: PostVisibility;
   author?: User;
   reactions?: PostReaction[];
   commentCount?: number;
@@ -181,12 +197,32 @@ export interface Post {
   createdAt: string;
 }
 
+export type PostInputVisibility = typeof PostInputVisibility[keyof typeof PostInputVisibility];
+
+
+export const PostInputVisibility = {
+  public: 'public',
+  friends_of_friends: 'friends_of_friends',
+  private: 'private',
+} as const;
+
 export interface PostInput {
   content: string;
   /** @nullable */
   imageUrl?: string | null;
   /** @nullable */
   bgColor?: string | null;
+  /** @nullable */
+  videoUrl?: string | null;
+  /** @nullable */
+  liveStreamId?: string | null;
+  /** @nullable */
+  feeling?: string | null;
+  /** @nullable */
+  activity?: string | null;
+  /** @nullable */
+  locationTag?: string | null;
+  visibility?: PostInputVisibility;
 }
 
 export type ReactionInputType = typeof ReactionInputType[keyof typeof ReactionInputType];

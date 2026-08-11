@@ -409,6 +409,20 @@ function PostCard({ post, currentUserId, isAdmin }: { post: any; currentUserId: 
       </div>
 
       {/* Content — supports color background */}
+      {post.liveStreamId && (
+        <Link href={`/live?streamId=${encodeURIComponent(post.liveStreamId)}`}>
+          <div className="mx-4 mb-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-600 px-4 py-3 text-white flex items-center gap-3 cursor-pointer hover:brightness-105 transition">
+            <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+              <Radio className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-black text-sm">LIVE NOW</p>
+              <p className="text-xs text-white/80 truncate">Tap to watch {post.author?.name}'s live video</p>
+            </div>
+            <Play className="h-5 w-5 fill-current shrink-0" />
+          </div>
+        </Link>
+      )}
       {hasBgColor ? (
         <div className="mx-4 mb-3 rounded-xl overflow-hidden">
           <div
@@ -581,6 +595,9 @@ export default function FeedPage() {
   const [feeling, setFeeling] = useState<string | null>(null);
   const [activity, setActivity] = useState<string | null>(null);
   const [locationTag, setLocationTag] = useState("");
+  const [postVisibility, setPostVisibility] = useState<"public" | "friends_of_friends" | "private">(
+    ((user?.privacy as "public" | "friends_of_friends" | "private") || "public")
+  );
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showBgPicker, setShowBgPicker] = useState(false);
@@ -618,6 +635,7 @@ export default function FeedPage() {
     setFeeling(null);
     setActivity(null);
     setLocationTag("");
+    setPostVisibility(((user?.privacy as "public" | "friends_of_friends" | "private") || "public"));
     setShowBgPicker(false);
     setComposerTab(null);
     setUploadProgress(0);
@@ -657,6 +675,7 @@ export default function FeedPage() {
         feeling: feeling ?? undefined,
         activity: activity ?? undefined,
         locationTag: locationTag.trim() || undefined,
+        visibility: postVisibility,
       };
       if (uploadedImageUrl) postData.imageUrl = uploadedImageUrl;
       if (uploadedVideoUrl) postData.videoUrl = uploadedVideoUrl;
@@ -813,6 +832,18 @@ export default function FeedPage() {
                   </p>
                 )}
               </div>
+            </div>
+            <div className="px-4 pb-2">
+              <label className="text-xs font-semibold text-gray-500 block mb-1">Who can see this post?</label>
+              <select
+                value={postVisibility}
+                onChange={e => setPostVisibility(e.target.value as typeof postVisibility)}
+                className="text-xs rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 outline-none focus:border-blue-400"
+              >
+                <option value="public">Public — everyone</option>
+                <option value="friends_of_friends">Friends of friends</option>
+                <option value="private">Private — only me</option>
+              </select>
             </div>
 
             {/* Textarea */}

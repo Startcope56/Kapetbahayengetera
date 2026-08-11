@@ -99,7 +99,7 @@ router.post("/status/features/:feature", requireAuth, async (req, res): Promise<
   const { enabled } = req.body as { enabled: boolean };
   if (!(feature in featureFlags)) { res.status(404).json({ error: "Unknown feature" }); return; }
   featureFlags[feature] = enabled;
-  logger.info({ feature, enabled, by: user.userId }, "Feature flag toggled");
+  logger.info({ feature, enabled, by: user.id }, "Feature flag toggled");
   res.json({ ok: true, feature, enabled });
 });
 

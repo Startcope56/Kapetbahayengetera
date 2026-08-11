@@ -1109,7 +1109,7 @@ components:
           type: ["string", "null"]
         privacy:
           type: string
-          enum: [public, friends]
+          enum: [public, friends_of_friends, private]
         isAdmin:
           type: boolean
         isBlueAI:
@@ -1140,7 +1140,7 @@ components:
           type: ["string", "null"]
         privacy:
           type: string
-          enum: [public, friends]
+          enum: [public, friends_of_friends, private]
 
     UserStats:
       type: object
@@ -1239,6 +1239,13 @@ components:
           type: ["string", "null"]
         bgColor:
           type: ["string", "null"]
+        videoUrl:
+          type: ["string", "null"]
+        liveStreamId:
+          type: ["string", "null"]
+        visibility:
+          type: string
+          enum: [public, friends_of_friends, private]
         author:
           $ref: "#/components/schemas/User"
         reactions:
@@ -1263,6 +1270,19 @@ components:
           type: ["string", "null"]
         bgColor:
           type: ["string", "null"]
+        videoUrl:
+          type: ["string", "null"]
+        liveStreamId:
+          type: ["string", "null"]
+        feeling:
+          type: ["string", "null"]
+        activity:
+          type: ["string", "null"]
+        locationTag:
+          type: ["string", "null"]
+        visibility:
+          type: string
+          enum: [public, friends_of_friends, private]
 
     PostReaction:
       type: object

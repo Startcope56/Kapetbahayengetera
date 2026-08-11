@@ -119,6 +119,8 @@ io.on("connection", (socket) => {
         content: `🔴 LIVE NOW: ${data.title || "Streaming Live!"}\n\nTap to join the live stream! 💙`,
         bgColor: "linear-gradient(135deg,#ef4444,#dc2626)",
         location: "live",
+        liveStreamId: data.streamId,
+        visibility: "public",
       } as any).returning();
       // Notify everyone
       io.emit("new_post", { post: livePost });
@@ -149,6 +151,7 @@ io.on("connection", (socket) => {
     socket.join(`live:${streamId}`);
     const room = io.sockets.adapter.rooms.get(`live:${streamId}`);
     io.to(`live:${streamId}`).emit("live_viewer_count", { count: room?.size ?? 1 });
+    socket.to(`live:${streamId}`).emit("live_viewer_joined", { viewerSocketId: socket.id });
   });
 
   socket.on("live_leave", ({ streamId }: any) => {
@@ -163,6 +166,20 @@ io.on("connection", (socket) => {
 
   socket.on("live_comment", ({ streamId, comment }: any) => {
     socket.to(`live:${streamId}`).emit("live_comment", comment);
+  });
+
+  // WebRTC relay for live broadcast viewers. Media stays peer-to-peer; the
+  // server only forwards signaling messages between the broadcaster/viewer.
+  socket.on("live_offer", ({ to, offer }: any) => {
+    io.to(to).emit("live_offer", { from: socket.id, offer });
+  });
+
+  socket.on("live_answer", ({ to, answer }: any) => {
+    io.to(to).emit("live_answer", { from: socket.id, answer });
+  });
+
+  socket.on("live_ice", ({ to, candidate }: any) => {
+    io.to(to).emit("live_ice", { from: socket.id, candidate });
   });
   // ─────────────────────────────────────────────────────────────────────────
 

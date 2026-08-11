@@ -43,8 +43,8 @@ router.post("/push/subscribe", requireAuth, async (req, res): Promise<void> => {
   try {
     await db.execute(sql`
       INSERT INTO push_subscriptions (user_id, endpoint, keys)
-      VALUES (${user.userId}, ${subscription.endpoint}, ${JSON.stringify(subscription.keys)})
-      ON CONFLICT (endpoint) DO UPDATE SET user_id = ${user.userId}, keys = ${JSON.stringify(subscription.keys)}
+      VALUES (${user.id}, ${subscription.endpoint}, ${JSON.stringify(subscription.keys)})
+      ON CONFLICT (endpoint) DO UPDATE SET user_id = ${user.id}, keys = ${JSON.stringify(subscription.keys)}
     `);
     res.json({ ok: true });
   } catch (e: any) {
@@ -56,7 +56,7 @@ router.post("/push/subscribe", requireAuth, async (req, res): Promise<void> => {
 // Unsubscribe
 router.delete("/push/subscribe", requireAuth, async (req, res): Promise<void> => {
   const user = getUser(req);
-  await db.execute(sql`DELETE FROM push_subscriptions WHERE user_id = ${user.userId}`);
+  await db.execute(sql`DELETE FROM push_subscriptions WHERE user_id = ${user.id}`);
   res.json({ ok: true });
 });
 
