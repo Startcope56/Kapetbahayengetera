@@ -28,7 +28,7 @@ const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
 // Video upload: 200 MB
 const videoUpload = multer({
   storage,
-  limits: { fileSize: 200 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["video/mp4", "video/webm", "video/ogg", "video/quicktime", "video/x-msvideo", "video/x-matroska"];
     if (allowed.includes(file.mimetype)) {
@@ -69,6 +69,7 @@ async function buildPost(post: typeof postsTable.$inferSelect, meId: number) {
     activity: post.activity ?? null,
     locationTag: (post as any).location ?? null,
     visibility: (post as any).visibility ?? "public",
+    anonymous: Boolean((post as any).anonymous),
     taggedUserIds: post.taggedUserIds ? JSON.parse(post.taggedUserIds) : [],
     author: author ? formatUser(author) : null,
     reactions,
@@ -152,6 +153,7 @@ router.post("/posts", requireAuth, async (req, res): Promise<void> => {
     location: locationTag ?? null,
     taggedUserIds: taggedUserIds ? JSON.stringify(taggedUserIds) : null,
     visibility: requestedVisibility,
+    anonymous: Boolean(req.body.anonymous) && Boolean((me as any).anonymousPosting),
   } as any).returning();
   const built = await buildPost(post, me.id);
   io.emit("new_post", built);
@@ -291,7 +293,7 @@ router.post("/posts/:id/upload-image", requireAuth, upload.single("file"), async
   res.json({ url });
 });
 
-// Upload VIDEO for a post (up to 200MB)
+// Legacy multipart VIDEO upload for a post (10MB; durable uploads use /storage)
 router.post("/posts/upload-video", requireAuth, videoUpload.single("file"), async (req, res): Promise<void> => {
   if (!req.file) { res.status(400).json({ error: "No video file provided" }); return; }
   const url = `/api/uploads/${req.file.filename}`;

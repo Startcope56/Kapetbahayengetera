@@ -16,6 +16,7 @@ export const postsTable = pgTable("posts", {
   location: text("location_tag"),
   taggedUserIds: text("tagged_user_ids"),
   visibility: text("visibility").notNull().default("public"),
+  anonymous: boolean("anonymous").notNull().default(false),
   viewCount: integer("view_count").notNull().default(0),
   isPinned: boolean("is_pinned").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

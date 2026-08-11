@@ -13,6 +13,7 @@ export const usersTable = pgTable("users", {
   location: text("location"),
   website: text("website"),
   privacy: text("privacy").notNull().default("public"),
+  anonymousPosting: boolean("anonymous_posting").notNull().default(false),
   isAdmin: boolean("is_admin").notNull().default(false),
   isBlueAI: boolean("is_blue_ai").notNull().default(false),
   blueBadge: boolean("blue_badge").notNull().default(false),

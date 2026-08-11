@@ -51,6 +51,7 @@ export function formatUser(user: typeof usersTable.$inferSelect) {
     location: user.location,
     website: user.website,
     privacy: user.privacy,
+    anonymousPosting: (user as any).anonymousPosting ?? false,
     isAdmin: user.isAdmin,
     isBlueAI: user.isBlueAI ?? false,
     blueBadge: user.blueBadge ?? false,
@@ -64,6 +65,9 @@ export function formatUser(user: typeof usersTable.$inferSelect) {
     totalPostViews: (user as any).totalPostViews ?? 0,
     profileViewCount: (user as any).profileViewCount ?? 0,
     rank: (user as any).rank ?? "Newbie",
+    accountStatus: user.banned ? "banned" : user.restricted ? "restricted" : ((user as any).accountApproved === false ? "pending" : "active"),
+    engagementScore: Math.min(100, Math.round((((user as any).followerCount ?? 0) * 0.35 + ((user as any).postCount ?? 0) * 1.5 + ((user as any).totalPostViews ?? 0) * 0.02) / 10)),
+    engagementPercent: Math.min(100, Math.round((((user as any).followerCount ?? 0) * 0.35 + ((user as any).postCount ?? 0) * 1.5 + ((user as any).totalPostViews ?? 0) * 0.02) / 10)),
     createdAt: user.createdAt.toISOString(),
   };
 }
