@@ -40,7 +40,7 @@ export const LoginBody = zod.object({
 })
 
 export const LoginResponse = zod.object({
-  "user": zod.object({
+  "user": zod.union([zod.object({
   "id": zod.number(),
   "email": zod.string(),
   "name": zod.string(),
@@ -57,8 +57,10 @@ export const LoginResponse = zod.object({
   "restricted": zod.boolean().optional(),
   "banned": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
-}),
-  "token": zod.string()
+}),zod.null()]),
+  "token": zod.string().nullable(),
+  "pending": zod.boolean().optional(),
+  "message": zod.string().nullish()
 })
 
 

@@ -34,7 +34,7 @@ function getGreeting(): string {
   return "Magandang gabi";
 }
 
-type Mode = "accounts" | "login" | "register-step1" | "register-step2" | "welcome";
+type Mode = "accounts" | "login" | "register-step1" | "register-step2" | "pending" | "welcome";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<Mode>("login");
@@ -43,6 +43,7 @@ export default function AuthPage() {
   const [birthday, setBirthday] = useState("");
   const [pin, setPin] = useState("");
   const [welcomeName, setWelcomeName] = useState("");
+  const [pendingMessage, setPendingMessage] = useState("");
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const { toast } = useToast();
@@ -78,6 +79,11 @@ export default function AuthPage() {
     if (cleanPin.length !== 4) { toast({ title: "Error", description: "4-digit PIN ang kailangan", variant: "destructive" }); return; }
     try {
       const res = await loginMutation.mutateAsync({ data: { email, pin: cleanPin } });
+      if (!res.user || !res.token) {
+        setPendingMessage(res.message || "Your account is still waiting for approval.");
+        setMode("pending");
+        return;
+      }
       saveAccount({ email, name: res.user.name, avatar: res.user.profilePicture || undefined, token: res.token, lastLogin: Date.now() });
       setSavedAccounts(getSaved());
       login(res.token, res.user.id);
@@ -110,12 +116,19 @@ export default function AuthPage() {
     if (cleanPin.length !== 4) { toast({ title: "4-digit PIN ang kailangan", variant: "destructive" }); return; }
     try {
       const res = await registerMutation.mutateAsync({ data: { email, name: name.trim(), pin: cleanPin } });
+      if (!res.user || !res.token) {
+        setPendingMessage(res.message || "Your account was submitted for review.");
+        setMode("pending");
+        return;
+      }
       saveAccount({ email, name: res.user.name, avatar: res.user.profilePicture || undefined, token: res.token, lastLogin: Date.now() });
       setSavedAccounts(getSaved());
       setWelcomeName(res.user.name);
       setMode("welcome");
+      const authToken = res.token;
+      const userId = res.user.id;
       setTimeout(() => {
-        login(res.token, res.user.id);
+        login(authToken, userId);
         setLocation("/feed");
       }, 3500);
     } catch (err: any) {
@@ -151,6 +164,25 @@ export default function AuthPage() {
               ))}
             </div>
             <p className="text-white/50 text-xs mt-4">Naglo-load ang iyong feed...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Approval-pending screen */}
+      {mode === "pending" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          style={{ background: "linear-gradient(135deg,#1877f2,#0a6bc7)" }}>
+          <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-3xl">
+              <CheckCircle className="h-8 w-8 text-blue-600" />
+            </div>
+            <h1 className="text-2xl font-black text-gray-900">Account submitted</h1>
+            <p className="mt-3 text-sm leading-relaxed text-gray-500">{pendingMessage}</p>
+            <button type="button" onClick={() => switchMode("login")}
+              className="mt-6 w-full rounded-2xl py-3.5 text-sm font-bold text-white transition active:scale-95"
+              style={{ background: "linear-gradient(135deg, #1877f2, #0a6bc7)" }}>
+              Back to login
+            </button>
           </div>
         </div>
       )}

@@ -8,6 +8,7 @@ import conversationsRouter from "./conversations";
 import notificationsRouter from "./notifications";
 import reportsRouter from "./reports";
 import adminRouter from "./admin";
+import statusRouter from "./status";
 import { storiesRouter } from "./stories";
 
 const router: IRouter = Router();
@@ -21,6 +22,7 @@ router.use(conversationsRouter);
 router.use(notificationsRouter);
 router.use(reportsRouter);
 router.use(adminRouter);
+router.use(statusRouter);
 router.use(storiesRouter);
 
 export default router;

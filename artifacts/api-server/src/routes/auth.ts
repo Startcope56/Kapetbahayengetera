@@ -16,8 +16,10 @@ async function getApprovalRequired(): Promise<boolean> {
 }
 
 router.post("/auth/register", async (req, res): Promise<void> => {
-  const { email, name, pin } = req.body;
-  if (!email || !name || !pin || pin.length !== 4) {
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const name = String(req.body?.name ?? "").trim();
+  const pin = String(req.body?.pin ?? "").trim();
+  if (!email || !name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\d{4}$/.test(pin)) {
     res.status(400).json({ error: "email, name, and 4-digit pin are required" });
     return;
   }
@@ -36,6 +38,10 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     accountApproved,
     rank: "Newbie",
   } as any).returning();
+  if (!user) {
+    res.status(500).json({ error: "Unable to create account. Please try again." });
+    return;
+  }
 
   if (accountApproved) {
     const token = crypto.randomBytes(32).toString("hex");
@@ -43,17 +49,18 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     res.status(201).json({ user: formatUser(user), token });
   } else {
     res.status(201).json({
-      user: null,
+      user: formatUser(user),
       token: null,
       pending: true,
-      message: "YOUR ACCOUNT IS WAITING FOR APPROVAL 🔒\n\nYour account has been submitted for review. The admin will approve your account shortly. Please check back later!\n\n— Blue Media Team 💙",
+      message: "Your account was submitted for review. You can log in after an admin approves it.",
     });
   }
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {
-  const { email, pin } = req.body;
-  if (!email || !pin) {
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const pin = String(req.body?.pin ?? "").trim();
+  if (!email || !/^\d{4}$/.test(pin)) {
     res.status(400).json({ error: "email and pin are required" });
     return;
   }

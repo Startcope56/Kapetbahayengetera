@@ -1083,9 +1083,15 @@ components:
       required: [user, token]
       properties:
         user:
-          $ref: "#/components/schemas/User"
+          oneOf:
+            - $ref: "#/components/schemas/User"
+            - type: "null"
         token:
-          type: string
+          type: ["string", "null"]
+        pending:
+          type: boolean
+        message:
+          type: ["string", "null"]
 
     User:
       type: object

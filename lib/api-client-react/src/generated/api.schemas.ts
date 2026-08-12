@@ -74,8 +74,12 @@ export interface User {
 }
 
 export interface AuthResponse {
-  user: User;
-  token: string;
+  user: User | null;
+  /** @nullable */
+  token: string | null;
+  pending?: boolean;
+  /** @nullable */
+  message?: string | null;
 }
 
 export type UserUpdatePrivacy = typeof UserUpdatePrivacy[keyof typeof UserUpdatePrivacy];
